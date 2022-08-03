@@ -25,5 +25,10 @@ typedef struct AST {
     };
 } AST;
 
+/* Function for printing AST */
+void print_AST(AST *root);
+
+void free_AST(AST *root);
+
 
 #endif

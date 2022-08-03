@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -g
-OBJECTS = lexer.o parser.o test.o
+OBJECTS = lexer.o parser.o AST.o test.o 
 
 all: test.out
 

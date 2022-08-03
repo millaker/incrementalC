@@ -30,6 +30,7 @@ AST *ast_func(char *name, AST* stmt) {
     n-> stmt = stmt;
     char *tempstr = (char *) malloc(sizeof(char) * (strlen(name) + 1));
     strncpy(tempstr, name, strlen(name) + 1);
+    n->fname = tempstr;
     return n;
 }
 

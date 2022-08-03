@@ -10,7 +10,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
     file_init(argv[1]);
-    read_program();
+    AST *program = read_program();
+    print_AST(program);
     printf("Success, no seg fault\n");
     return 0;
 }
