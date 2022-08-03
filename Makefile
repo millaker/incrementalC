@@ -1,11 +1,10 @@
 CC = gcc
 CFLAGS = -Wall -g
-OBJECTS = lexer.o
-LEX_OBJECTS = lexer.o test_lex.o
+OBJECTS = lexer.o parser.o test.o
 
-all: test_lex.out
+all: test.out
 
-test_lex.out : $(LEX_OBJECTS)
+test.out : $(OBJECTS)
 	@printf "[CC]\t$@\n"
 	@$(CC) $(CFLAGS) -o $@ $^
 

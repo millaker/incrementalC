@@ -28,5 +28,6 @@ void unget_token(Token *);
 bool file_init(char *s);
 void print_token(Token *);
 void free_token(Token *);
+char *token_to_string(Token *);
 
 #endif

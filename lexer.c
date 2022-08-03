@@ -41,27 +41,27 @@ static inline char mygetc(FILE *f){
 // Identifiers or reserved word
 Token *lex_ident(char c) {
     Token *t = new_token;
-        //Consume all the alphanumeric chars and store in buffer
-        //Support up to 32 characters long identifier name
-        char buffer[33] = {c};
-        int i = 1;
-        /* Ignores characters that exceeds limited length(32) */
-        while(1){
-            c = mygetc(infile);
-            if((!isalnum(c) && c != '_') || c == EOF){
-                ungetc(c, infile);
-                break;
-            }
-            if(i >= 31)
-                continue;
-            buffer[i++] = c;
+    //Consume all the alphanumeric chars and store in buffer
+    //Support up to 32 characters long identifier name
+    char buffer[33] = {c};
+    int i = 1;
+    /* Ignores characters that exceeds limited length(32) */
+    while(1){
+        c = mygetc(infile);
+        if((!isalnum(c) && c != '_') || c == EOF){
+            ungetc(c, infile);
+            break;
         }
-        buffer[i] = '\0';
-        char *tempstr = (char*) malloc(sizeof(char) * (strlen(buffer) + 1));
-        strncpy(tempstr, buffer, strlen(buffer) + 1);
-        t->type = IDENTIFIER;
-        t->string = tempstr;
-        return t;
+        if(i >= 31)
+            continue;
+        buffer[i++] = c;
+    }
+    buffer[i] = '\0';
+    char *tempstr = (char*) malloc(sizeof(char) * (strlen(buffer) + 1));
+    strncpy(tempstr, buffer, strlen(buffer) + 1);
+    t->type = IDENTIFIER;
+    t->string = tempstr;
+    return t;
 }
 
 // Intliteral
@@ -158,5 +158,27 @@ void free_token(Token *t) {
     if(t->type == IDENTIFIER)
         free(t->string);
     free(t);
+}
+
+char *token_to_string(Token *tok){
+    char *tempstr = (char*) malloc(sizeof(char) * 32);
+    switch(tok->type){
+        case INTLITERAL:
+            strcpy(tempstr, "integer literal");
+            break;
+        case IDENTIFIER:
+            strcpy(tempstr, "Identifier:");
+            strncat(tempstr,tok->string, 32);
+            break;
+        case PUNCT:
+            tempstr[0] = '\'';
+            tempstr[1] = tok->charval;
+            tempstr[2] = '\'';
+            tempstr[3] = '\0';
+            break;
+        default:
+            strcpy(tempstr, "Unknown type");
+    }
+    return tempstr;
 }
 
