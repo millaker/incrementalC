@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     while((c = argv[1][i]) && c != '.'){
         filename[i++] = c;
     }
-    printf("Output filename : %s.s\n", filename);
+    //printf("Output filename : %s.s\n", filename);
     /* Check input file type */
     if(c == '.' && argv[1][++i] != 'c'){
         fprintf(stderr, "Wrong file type, .c file required\n");
@@ -25,8 +25,8 @@ int main(int argc, char **argv) {
     }
     file_init(argv[1]);
     AST *program = read_program();
-    print_AST(program);
+    //print_AST(program);
     code_gen(filename, program);
-    printf("Success\n");
+    //printf("Success\n");
     return 0;
 }
