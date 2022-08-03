@@ -1,10 +1,11 @@
 CC = gcc
 CFLAGS = -Wall -g
-OBJECTS = lexer.o parser.o AST.o test.o 
+OBJECTS = lexer.o parser.o AST.o test.o code_gen.o
+OUTFILE = test.out
 
-all: test.out
+all: $(OUTFILE)
 
-test.out : $(OBJECTS)
+$(OUTFILE) : $(OBJECTS)
 	@printf "[CC]\t$@\n"
 	@$(CC) $(CFLAGS) -o $@ $^
 
@@ -12,8 +13,11 @@ test.out : $(OBJECTS)
 	@printf "[CC]\t$@\n"
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-.PHONY: clean 
+.PHONY: clean run
 clean:
 	rm -rf *.o *.out
+run:
+	@printf "[RUN] $(OUTFILE)\n"
+	@./test.out test_input.c
 	
 
