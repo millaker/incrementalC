@@ -14,14 +14,29 @@ void parser_errorf(char *name, int line, char *fmt,...) {
     va_start(arg, fmt);
     vfprintf(stderr,fmt,arg);
     va_end(arg);
+    exit(1);
 }
+
+bool peek_token(int type) {
+    Token *t = get_token();
+    unget_token(t);
+    return t->type == type;
+}
+
 
 bool is_punct(Token *t, char c) {
     if(t->type != PUNCT || t->charval != c){
-        unget_token(t);
         return FALSE;
     }
     return TRUE;
+}
+
+AST *ast_uop(int op, AST *expr) {
+    AST *n = NEW_AST;
+    n->type = AST_UNARY;
+    n->expr = expr;
+    n->uop = op;
+    return n;
 }
 
 AST *ast_func(char *name, AST* stmt) {
@@ -53,13 +68,26 @@ AST *read_intliteral() {
     if(tok->type != INTLITERAL) {
         unget_token(tok);
         error("Expect integer literal, but got %s\n", token_to_string(tok));
-        exit(1);
     }
     return ast_int(tok->intval);
 }
 
 AST *read_expr() {
-    return read_intliteral();
+    /* Read unary operator can be a separate function */
+    if(peek_token(PUNCT)) {
+        Token *t = get_token();
+        AST *expr;
+        if(is_punct(t, '~') || is_punct(t, '!') || is_punct(t, '-')){
+            expr = read_expr();
+            return ast_uop(t->charval, expr);
+        }
+        unget_token(t);
+    }
+    if(peek_token(INTLITERAL)){
+        return read_intliteral();
+    }
+    error("Expect expression\n");
+    return NULL;
 }
 
 AST *read_return() {
@@ -67,7 +95,6 @@ AST *read_return() {
     if(tok->type != IDENTIFIER || strcmp(tok->string, "return")){
         unget_token(tok);
         error("Expect keyword \"return\", but got %s\n", token_to_string(tok));
-        exit(1);
     }
     //read expr
     AST *retval = read_expr();
@@ -78,9 +105,8 @@ AST *read_stmt() {
     AST *stmt = read_return();
     Token *tok = get_token();
     if(!is_punct(tok, ';')){
-        error("Expect semicolon, but got %s\n", token_to_string(tok));
         unget_token(tok);
-        exit(1);
+        error("Expect semicolon, but got %s\n", token_to_string(tok));
     }
     return stmt;
 }
@@ -90,7 +116,6 @@ AST *read_func_decl() {
     if(tok->type != IDENTIFIER || strcmp(tok->string, "int")){
         unget_token(tok);
         error("Expect keyword \"int\", but got %s\n", token_to_string(tok));
-        exit(1);
     }
     //parse func name
     tok = get_token();
@@ -99,25 +124,21 @@ AST *read_func_decl() {
         fname = tok;
     } else {
         error("Expect function name, but got %s\n", token_to_string(tok));
-        exit(1);
     }
     tok = get_token();
     if(!is_punct(tok, '(')){
-        error("Expect \'(\', but got %s\n", token_to_string(tok));
         unget_token(tok);
-        exit(1);
+        error("Expect \'(\', but got %s\n", token_to_string(tok));
     }
     tok = get_token();
     if(!is_punct(tok, ')')){
-        error("Expect \')\', but got %s\n", token_to_string(tok));
         unget_token(tok);
-        exit(1);
+        error("Expect \')\', but got %s\n", token_to_string(tok));
     }
     tok = get_token();
     if(!is_punct(tok, '{')){
-        error("Expect \'{\', but got %s\n", token_to_string(tok));
         unget_token(tok);
-        exit(1);
+        error("Expect \'{\', but got %s\n", token_to_string(tok));
     }
 
     AST *stmt = read_stmt();
@@ -127,9 +148,8 @@ AST *read_func_decl() {
     }
     tok = get_token();
     if(!is_punct(tok, '}')){
-        error("Expect punct \'}\', but got %s", token_to_string(tok));
         unget_token(tok);
-        exit(1);
+        error("Expect punct \'}\', but got %s", token_to_string(tok));
     }
     return ast_func(fname->string, stmt);
 }

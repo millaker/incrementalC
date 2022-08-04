@@ -5,6 +5,7 @@ enum {
     AST_LITERAL,
     AST_FUNC,
     AST_RET,
+    AST_UNARY
 };
 
 
@@ -21,6 +22,11 @@ typedef struct AST {
         /* AST_RET */
         struct {
             struct AST *retval;
+        };
+        /* AST_UNARY */
+        struct {
+            int uop;
+            struct AST *expr;
         };
     };
 } AST;

@@ -50,6 +50,11 @@ void __print_AST(AST *root,int indent, int last){
         case AST_RET:
             printf("RETURN\n");
             __print_AST(root->retval, indent + 1,  1);
+            break;
+        case AST_UNARY:
+            printf("UNARY(%c)\n", root->uop);
+            __print_AST(root->expr, indent + 1, 1);
+            break;
         default:
             ;
     }

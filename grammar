@@ -1,0 +1,9 @@
+<program> = <func_decl>
+<func_decl> = int <func_name> ( ) { <statement> }
+<func_name> = <Identifier>
+<statement> = return <expr> ;
+<expr> = <IntLiteral>
+       | <UnaryOP> <expr> 
+<UnaryOP> = ~
+          | !
+          | -

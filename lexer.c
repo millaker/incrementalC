@@ -92,7 +92,6 @@ Token *get_token() {
     if (token_buf) {
         Token *t = token_buf;
         token_buf = NULL;
-        fclose(infile);
         return t;
     }
     char c = mygetc(infile);
