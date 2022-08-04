@@ -12,7 +12,9 @@ do
     ./a.out
     result=$?
 
-    echo -n "$i:  "
+    printf "\n-------------------------------------------------\n"
+    echo  "$i"
+    printf "\nResult: "
     if [ "$expected" -ne "$result" ]
     then
         echo "FAIL"
@@ -30,8 +32,10 @@ for i in tests/invalid/*.c
 do
     ./test.out $i 2> /dev/null
     base=${i%.c}.s
-    echo -n "$i:  "
+    printf "\n-------------------------------------------------\n"
+    echo  "$i"
     flag=0
+    printf "\nResult: "
     for j in week1/invalid/*
     do
         if [ "$base" == "$j" ]
@@ -50,4 +54,4 @@ do
 done
 
 printf "\n-------------------------------------------------\n"
-printf "Result: $pass passed, $fail failed\n"
+printf "Final Result: $pass passed, $fail failed\n"

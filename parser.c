@@ -6,6 +6,23 @@
 
 #define NEW_AST ((AST*) malloc(sizeof(AST)))
 
+/* Forward declaration */
+AST *ast_uop(int op, AST *expr);
+AST *ast_bop(int op, AST *left, AST *right);
+AST *ast_func(char *name, AST* stmt);
+AST *ast_ret(AST *retval);
+AST *ast_int(int val);
+
+AST *read_intliteral();
+AST *read_term();
+AST *read_factor();
+AST *read_uop();
+AST *read_expr();
+AST *read_return();
+AST *read_stmt();
+AST *read_func_decl();
+AST *read_program();
+
 #define error(...) parser_errorf(__FILE__,__LINE__,__VA_ARGS__)
 
 void parser_errorf(char *name, int line, char *fmt,...) {
@@ -23,8 +40,14 @@ bool peek_token(int type) {
     return t->type == type;
 }
 
-
-bool is_punct(Token *t, char c) {
+/*
+ * Peek the next token, won't consume the next token
+ * Return True if token is PUNCT and same with input
+ * Return FALSE otherwise
+ */
+bool is_punct(char c) {
+    Token *t = get_token();
+    unget_token(t);
     if(t->type != PUNCT || t->charval != c){
         return FALSE;
     }
@@ -36,6 +59,15 @@ AST *ast_uop(int op, AST *expr) {
     n->type = AST_UNARY;
     n->expr = expr;
     n->uop = op;
+    return n;
+}
+
+AST *ast_bop(int op, AST *left, AST *right) {
+    AST *n = NEW_AST;
+    n->type = AST_BINARY;
+    n->bop = op;
+    n->lexpr = left;
+    n->rexpr = right;
     return n;
 }
 
@@ -63,6 +95,39 @@ AST *ast_int(int val) {
     return n;
 }
 
+AST *read_term() {
+    AST *res = read_factor();
+    //Parse more factors
+    while(is_punct('*') || is_punct('/')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_factor());
+    }
+    return res;
+}
+
+AST *read_factor() {
+    //( expr )
+    if(is_punct('(')){
+        get_token();
+        AST *expr = read_expr();
+        if(!is_punct(')'))
+            error("Expected ), but got %s\n", token_to_string(get_token()));
+        get_token();
+        return expr;
+    }
+    // <UnaryOP> <factor>
+    AST *ast;
+    if((ast = read_uop())){
+        return ast;
+    }
+    //Int literal
+    if((ast = read_intliteral())){
+        return ast;
+    }
+    error("Error factor\n");
+    return NULL;
+}
+
 AST *read_intliteral() {
     Token *tok = get_token();
     if(tok->type != INTLITERAL) {
@@ -72,22 +137,24 @@ AST *read_intliteral() {
     return ast_int(tok->intval);
 }
 
-AST *read_expr() {
-    /* Read unary operator can be a separate function */
-    if(peek_token(PUNCT)) {
+AST *read_uop() {
+    AST *expr;
+    if(is_punct('-') || is_punct('~') || is_punct('!')){
         Token *t = get_token();
-        AST *expr;
-        if(is_punct(t, '~') || is_punct(t, '!') || is_punct(t, '-')){
-            expr = read_expr();
-            return ast_uop(t->charval, expr);
-        }
-        unget_token(t);
+        expr = read_factor();
+        return ast_uop(t->charval, expr);
     }
-    if(peek_token(INTLITERAL)){
-        return read_intliteral();
-    }
-    error("Expect expression\n");
     return NULL;
+}
+
+AST *read_expr() {
+    AST *res = read_term();
+    //Parse more terms
+    while(is_punct('+') || is_punct('-')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_term());
+    }
+    return res;
 }
 
 AST *read_return() {
@@ -103,11 +170,10 @@ AST *read_return() {
 
 AST *read_stmt() {
     AST *stmt = read_return();
-    Token *tok = get_token();
-    if(!is_punct(tok, ';')){
-        unget_token(tok);
-        error("Expect semicolon, but got %s\n", token_to_string(tok));
+    if(!is_punct(';')){
+        error("Expect semicolon, but got %s\n", token_to_string(get_token()));
     }
+    get_token();
     return stmt;
 }
 
@@ -125,32 +191,28 @@ AST *read_func_decl() {
     } else {
         error("Expect function name, but got %s\n", token_to_string(tok));
     }
-    tok = get_token();
-    if(!is_punct(tok, '(')){
-        unget_token(tok);
-        error("Expect \'(\', but got %s\n", token_to_string(tok));
+    if(!is_punct('(')){
+        error("Expect \'(\', but got %s\n", token_to_string(get_token()));
     }
-    tok = get_token();
-    if(!is_punct(tok, ')')){
-        unget_token(tok);
-        error("Expect \')\', but got %s\n", token_to_string(tok));
+    get_token();
+    if(!is_punct(')')){
+        error("Expect \')\', but got %s\n", token_to_string(get_token()));
     }
-    tok = get_token();
-    if(!is_punct(tok, '{')){
-        unget_token(tok);
-        error("Expect \'{\', but got %s\n", token_to_string(tok));
+    get_token();
+    if(!is_punct('{')){
+        error("Expect \'{\', but got %s\n", token_to_string(get_token()));
     }
+    get_token();
 
     AST *stmt = read_stmt();
     if(!stmt){
         error("Parse statement error\n");
         return NULL;
     }
-    tok = get_token();
-    if(!is_punct(tok, '}')){
-        unget_token(tok);
-        error("Expect punct \'}\', but got %s", token_to_string(tok));
+    if(!is_punct('}')){
+        error("Expect punct \'}\', but got %s\n", token_to_string(get_token()));
     }
+    get_token();
     return ast_func(fname->string, stmt);
 }
 

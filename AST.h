@@ -5,7 +5,8 @@ enum {
     AST_LITERAL,
     AST_FUNC,
     AST_RET,
-    AST_UNARY
+    AST_UNARY,
+    AST_BINARY
 };
 
 
@@ -27,6 +28,12 @@ typedef struct AST {
         struct {
             int uop;
             struct AST *expr;
+        };
+        /* AST_BINARY */
+        struct {
+            int bop;
+            struct AST *lexpr;
+            struct AST *rexpr;
         };
     };
 } AST;

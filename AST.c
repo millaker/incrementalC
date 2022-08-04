@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_DEPTH 16
-
 /*
  * A printing method for AST.
  * Currently only supports max depth of 16
@@ -14,7 +12,8 @@
  * if its the last child.
  */
 
-static char prefix[5][MAX_DEPTH] = {0};
+static char (*prefix)[5] = NULL;
+static int max_depth = 16;
 
 static const char *table[4] = {
     " ├─ ",
@@ -23,10 +22,22 @@ static const char *table[4] = {
     "    "
 };
 
-static inline void new_prefix(int indent, int last){
-    strcpy(prefix[indent], last ? table[3]: table[1]);
+static inline void extend_prefix(){
+    int old = max_depth;
+    max_depth *= 2;
+    prefix = realloc(prefix, max_depth);
+    for(int i = old; i < max_depth; i++){
+        for(int j = 0; j < 5; j++){
+            prefix[i][j] = 0;
+        }
+    }
 }
 
+static inline void new_prefix(int indent, int last){
+    if(indent >= max_depth)
+        extend_prefix();
+    strncpy(prefix[indent], last ? table[3]: table[1], 5);
+}
 
 void __print_AST(AST *root,int indent, int last){
     if(!root)
@@ -55,19 +66,26 @@ void __print_AST(AST *root,int indent, int last){
             printf("UNARY(%c)\n", root->uop);
             __print_AST(root->expr, indent + 1, 1);
             break;
+        case AST_BINARY:
+            printf("BINARY(%c)\n", root->bop);
+            __print_AST(root->lexpr, indent + 1, 0);
+            __print_AST(root->rexpr, indent + 1, 1);
+            break;
         default:
-            ;
+            printf("Unknown AST node\n");
     }
 }
 
 void print_AST(AST *root) {
-    for(int i = 0; i < 5; i++){
-        for(int j = 0; j < MAX_DEPTH; j++){
-            prefix[i][j] = '\0';
+    prefix = (char (*)[5]) malloc(sizeof(char [5]) * max_depth);
+    for(int i = 0; i < max_depth; i++){
+        for(int j = 0; j < 5; j++){
+            prefix[i][j] = 0;
         }
     }
     __print_AST(root, 0, 1);
 }
+
 
 
 

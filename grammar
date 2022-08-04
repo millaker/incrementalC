@@ -1,9 +1,11 @@
 <program> = <func_decl>
-<func_decl> = int <func_name> ( ) { <statement> }
-<func_name> = <Identifier>
+<func_decl> = "int"" <Identifier> "(" ")" "{" <statement> "}"
 <statement> = return <expr> ;
-<expr> = <IntLiteral>
-       | <UnaryOP> <expr> 
-<UnaryOP> = ~
-          | !
-          | -
+<expr> = <term> {("+" | "-")<term>}
+<term> = <factor> {("*" | "/")<factor>}
+<factor> = "(" <expr> ")"
+         | <UnaryOP> <factor>
+         | IntLiteral
+<UnaryOP> = "~"
+          | "!"
+          | "-"
