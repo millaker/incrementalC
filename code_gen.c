@@ -46,6 +46,42 @@ void __code_gen(AST *root) {
                     break;
             }
             break;
+        case AST_BINARY:
+            switch(root->bop){
+                case '+':
+                    __code_gen(root->lexpr);
+                    emit("\tpush\t%%rax\t\t#Push left expression result onto stack\n");
+                    __code_gen(root->rexpr);
+                    emit("\tpop\t%%rcx\t\t#Pop left expression result\n");
+                    emit("\taddl\t%%ecx, %%eax\n");
+                    break;
+                case '-':
+                    __code_gen(root->rexpr);
+                    emit("\tpush\t%%rax\t\t#Push right expression result onto stack\n");
+                    __code_gen(root->lexpr);
+                    emit("\tpop\t%%rcx\t\t#Pop right expression result\n");
+                    emit("\tsubl\t%%ecx, %%eax\n");
+                    break;
+                case '*':
+                    __code_gen(root->lexpr);
+                    emit("\tpush\t%%rax\t\t#Push left expression result onto stack\n");
+                    __code_gen(root->rexpr);
+                    emit("\tpop\t%%rcx\t\t#Pop left expression result\n");
+                    emit("\timull\t%%ecx, %%eax\n");
+                    break;
+                case '/':
+                    __code_gen(root->rexpr);
+                    emit("\tpush\t%%rax\t\t#Push right expression result onto stack\n");
+                    __code_gen(root->lexpr);
+                    emit("\tpop\t%%rcx\t\t#Pop right expression result\n");
+                    emit("\tmovl\t$0, %%edx\n\t\t#Zero out %%edx, prepare for idiv\n");
+                    emit("\tidivl\t%%ecx\t\t#IDIV: EDX:EAX divided by %%ecx, result stored in %%eax\n");
+                    break;
+                default:
+                    fprintf(stderr, "Code gen: Unkown binary operator\n");
+                    exit(1);
+            }
+            break;
         default:
             fprintf(stderr, "Code gen error: Invalid AST type\n");
             exit(1);

@@ -1,9 +1,14 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "lexer.h"
 #include "parser.h"
 #include "femtoC.h"
 #include "AST.h"
 #include "code_gen.h"
+
+static char *filename = NULL;
+/* Other arguments can be implemented in the future */
 
 int main(int argc, char **argv) {
     if(argc != 2) {
@@ -11,15 +16,15 @@ int main(int argc, char **argv) {
         exit(1);
     }
     /* Parse filename */
-    char filename[32] = {0};
+    int size = strlen(argv[1]);
+    filename = malloc(sizeof(char) * (size + 1));
     char c;
     int i = 0;
     while((c = argv[1][i]) && c != '.'){
         filename[i++] = c;
     }
-    //printf("Output filename : %s.s\n", filename);
     /* Check input file type */
-    if(c == '.' && argv[1][++i] != 'c'){
+    if(c == '.' && ++i <= size &&  argv[1][i] != 'c'){
         fprintf(stderr, "Wrong file type, .c file required\n");
         exit(1);
     }

@@ -7,6 +7,8 @@ TESTLEXOBJ = lexer.o test_lexer.o
 TESTPARSE = parser.out
 TESTPARSEOBJ = lexer.o test_parser.o parser.o AST.o
 
+TESTINPUT = test_input
+
 all: $(OUTFILE) $(TESTLEX) $(TESTPARSE)
 
 $(OUTFILE) : $(OBJECTS)
@@ -29,8 +31,11 @@ $(TESTPARSE) : $(TESTPARSEOBJ)
 clean:
 	rm -rf *.o *.out
 run:
-	@printf "[RUN] $(OUTFILE)\n"
-	@./test.out test_input.c
+	@printf "[RUN] $(OUTFILE) $(TESTINPUT).c\n"
+	@./test.out $(TESTINPUT).c
+	@printf "[CC] $(TESTINPUT).out\n"
+	@gcc $(TESTINPUT).s -o $(TESTINPUT).out
+
 lex:
 	@printf "[TEST][$(TESTLEX)]\n"
 	@./lexer.out test_input.c
