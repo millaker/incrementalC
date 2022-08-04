@@ -12,31 +12,27 @@
  * if its the last child.
  */
 
-static char (*prefix)[5] = NULL;
+static char **prefix = {0};
 static int max_depth = 16;
 
-static const char *table[4] = {
+static char *table[4] = {
     " ├─ ",
     " │  ",
     " └─ ",
     "    "
 };
 
+
 static inline void extend_prefix(){
-    int old = max_depth;
     max_depth *= 2;
-    prefix = realloc(prefix, max_depth);
-    for(int i = old; i < max_depth; i++){
-        for(int j = 0; j < 5; j++){
-            prefix[i][j] = 0;
-        }
-    }
+    prefix = realloc(prefix, sizeof(char*) * max_depth);
 }
+
 
 static inline void new_prefix(int indent, int last){
     if(indent >= max_depth)
         extend_prefix();
-    strncpy(prefix[indent], last ? table[3]: table[1], 5);
+    prefix[indent] = last ? table[3] : table[1];
 }
 
 void __print_AST(AST *root,int indent, int last){
@@ -77,12 +73,9 @@ void __print_AST(AST *root,int indent, int last){
 }
 
 void print_AST(AST *root) {
-    prefix = (char (*)[5]) malloc(sizeof(char [5]) * max_depth);
-    for(int i = 0; i < max_depth; i++){
-        for(int j = 0; j < 5; j++){
-            prefix[i][j] = 0;
-        }
-    }
+    prefix = malloc(sizeof(char*) * max_depth);
+    for(int i = 0; i < max_depth; i++)
+        prefix[i] = NULL;
     __print_AST(root, 0, 1);
 }
 
