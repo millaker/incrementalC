@@ -7,18 +7,12 @@
 #include <string.h>
 #include "femtoC.h"
 
-enum {
-    EOFTYPE,
-    PUNCT,
-    IDENTIFIER,
-    INTLITERAL,
-};
 
 typedef struct Token {
     int type;
     union {
         int intval;
-        char charval;
+        int charval;
         char *string;
     };
 } Token;

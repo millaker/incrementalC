@@ -35,6 +35,11 @@ static inline void new_prefix(int indent, int last){
     prefix[indent] = last ? table[3] : table[1];
 }
 
+static char *operator_table[16] = {
+    "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
+    "+=", "--", "--", "*=", "/="
+};
+
 void __print_AST(AST *root,int indent, int last){
     if(!root)
         return;
@@ -63,7 +68,11 @@ void __print_AST(AST *root,int indent, int last){
             __print_AST(root->expr, indent + 1, 1);
             break;
         case AST_BINARY:
-            printf("BINARY(%c)\n", root->bop);
+            if(root->bop > 255) {
+                printf("BINARY(%s)\n", operator_table[root->bop - 256]);
+            }else{
+                printf("BINARY(%c)\n", root->bop);
+            }
             __print_AST(root->lexpr, indent + 1, 0);
             __print_AST(root->rexpr, indent + 1, 1);
             break;

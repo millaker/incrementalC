@@ -84,6 +84,108 @@ Token *lex_int(char c) {
     }
 }
 
+Token *lex_punct(char c){
+    Token *t = new_token;
+    t->type = PUNCT;
+    t->charval = c;
+    switch(c){
+        case '&':
+            c = mygetc(infile);
+            if(c == '&')
+                t->charval = PUNCT_LOG_AND;
+            else if(c == '=')
+                t->charval = PUNCT_BIT_AND_ASSIGN;
+            else
+             ungetc(c, infile);
+            break;
+        case '|':
+            c = mygetc(infile);
+            if(c == '|'){
+                t->charval = PUNCT_LOG_OR;
+            }else if(c == '='){
+                t->charval = PUNCT_BIT_OR_ASSIGN;
+            }else {
+                ungetc(c, infile);
+            }
+            break;
+        case '=':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_EQ;
+            } else {
+                ungetc(c, infile);
+            }
+            break;
+        case '!':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_NEQ;
+            }else {
+                ungetc(c, infile);
+            }
+            break;
+        case '<':
+            c = mygetc(infile);
+            if(c == '<'){
+                t->charval = PUNCT_LSHIFT;
+            } else if(c == '='){
+                t->charval = PUNCT_LTE;
+            } else {
+                ungetc(c, infile);
+            }
+            break;
+        case '>':
+            c = mygetc(infile);
+            if(c == '>') {
+                t->charval = PUNCT_RSHIFT;
+            }else if(c == '='){
+                t->charval = PUNCT_GTE;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        case '+':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_ADD_ASSIGN;
+            }else if(c == '+'){
+                t->charval = PUNCT_INC;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        case '-':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_SUB_ASSIGN;
+            }else if(c == '-'){
+                t->charval = PUNCT_DEC;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        case '*':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_MUL_ASSIGN;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        case '/':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_DIV_ASSIGN;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        default:
+            return t;
+    }
+    return t;
+}
+
 /*
  * Get next token
  * Return a pointer to Token struct
@@ -113,10 +215,7 @@ Token *get_token() {
         return lex_int(c);
     }
     //PUNCT
-    Token *t = new_token;
-    t->type = PUNCT;
-    t->charval = c;
-    return t;
+    return lex_punct(c);
 }
 
 /*
@@ -125,6 +224,16 @@ Token *get_token() {
 void unget_token(Token *token) {
     token_buf = token;
 }
+
+
+/* Look up table for multicharacter operators */
+/* There is a same table in AST.c: drawing utilities */
+/* Remember to update both table when needed*/ 
+/* When adding new elements, update the table size as well */
+static char *operator_table[16] = {
+    "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
+    "+=", "--", "--", "*=", "/="
+};
 
 /*
  * For debugging
@@ -136,7 +245,10 @@ void print_token(Token* token) {
             printf("EOF ");
             break;
         case PUNCT:
-            printf("PUNCT(%c) ", token->charval);
+            if(token->charval < 256)
+                printf("PUNCT(%c) ", token->charval);
+            else
+                printf("PUNCT(%s) ", operator_table[token->charval - 256]);
             break;
         case IDENTIFIER:
             printf("ID(%s) ", token->string);
@@ -170,10 +282,13 @@ char *token_to_string(Token *tok){
             strncat(tempstr,tok->string, 32);
             break;
         case PUNCT:
-            tempstr[0] = '\'';
-            tempstr[1] = tok->charval;
-            tempstr[2] = '\'';
-            tempstr[3] = '\0';
+            strcpy(tempstr, "Punct: ");
+            if(tok->charval > 255){
+                strcat(tempstr, operator_table[tok->charval - 256]);
+            }else{
+                char c[2] = {tok->charval, 0};
+                strcat(tempstr, c);
+            }
             break;
         default:
             strcpy(tempstr, "Unknown type");

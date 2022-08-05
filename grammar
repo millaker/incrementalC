@@ -1,7 +1,16 @@
 <program> = <func_decl>
 <func_decl> = "int"" <Identifier> "(" ")" "{" <statement> "}"
 <statement> = return <expr> ;
-<expr> = <term> {("+" | "-")<term>}
+
+<expr> = <logical-AND-expr> {"||" <logcial-AND-expr>}  ##<logical-OR> is the lowest level
+<logical-AND-expr> = <bitwise-OR> {"&&" <bitwise-OR>}
+<bitwise-OR> = <bitwise-XOR> {"|" <bitwise-XOR>}
+<bitwise-XOR> = <bitwise-AND> {"^" <bitwise-AND>}
+<bitwise-AND> = <rel-eq> { "&" <rel-eq> }
+<eq> = <rel> { ("==" | "!=") <rel> }
+<rel> = <bit-shift> {(">" | "<" | "<=" | ">=") <bit-shift>}
+<bit-shift> = <additive> {("<<" | ">>") <additive>}
+<additive> = <term> {("+" | "-") <term>}
 <term> = <factor> {("*" | "/")<factor>}
 <factor> = "(" <expr> ")"
          | <UnaryOP> <factor>

@@ -12,16 +12,17 @@ do
     ./a.out
     result=$?
 
-    printf "\n-------------------------------------------------\n"
-    echo  "$i"
-    printf "\nResult: "
     if [ "$expected" -ne "$result" ]
     then
-        echo "FAIL"
-        echo "Expect $expected, but got $result"
+        printf "\033[93;1;m$i\n"
+        printf "Result: "
+        printf "\033[31;1;mFAIL\n"
+        printf "Expect $expected, but got $result\033[0m\n"
         fail=$((fail + 1))
     else
-        echo "PASS"
+        printf "$i\n"
+        printf "Result: "
+        printf "\033[92;1;mPASS\033[0m\n"
         pass=$((pass + 1))
     fi
     rm $base
@@ -32,15 +33,14 @@ for i in tests/invalid/*.c
 do
     ./test.out $i 2> /dev/null
     base=${i%.c}.s
-    printf "\n-------------------------------------------------\n"
-    echo  "$i"
     flag=0
-    printf "\nResult: "
     for j in week1/invalid/*
     do
         if [ "$base" == "$j" ]
         then
-            echo "FAIL"
+            printf "\033[93;1;m$i\n"
+            printf "Result: "
+            printf "\033[31;1;mFAIL\033[0m\n"
             flag=1
             fail=$((fail + 1))
             break
@@ -48,10 +48,11 @@ do
     done
     if [ $flag != 1 ]
     then
-        echo "PASS"
+        printf "$i\n"
+        printf "Result: "
+        printf "\033[92;1;mPASS\033[0m\n"
         pass=$((pass + 1))
     fi
 done
 
-printf "\n-------------------------------------------------\n"
 printf "Final Result: $pass passed, $fail failed\n"

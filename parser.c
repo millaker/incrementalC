@@ -18,6 +18,15 @@ AST *read_term();
 AST *read_factor();
 AST *read_uop();
 AST *read_expr();
+AST *read_log_OR();
+AST *read_log_AND();
+AST *read_bit_OR();
+AST *read_bit_XOR();
+AST *read_bit_AND();
+AST *read_eq();
+AST *read_rel();
+AST *read_bit_shift();
+AST *read_additive();
 AST *read_return();
 AST *read_stmt();
 AST *read_func_decl();
@@ -45,10 +54,10 @@ bool peek_token(int type) {
  * Return True if token is PUNCT and same with input
  * Return FALSE otherwise
  */
-bool is_punct(char c) {
+bool is_punct(int c) {
     Token *t = get_token();
     unget_token(t);
-    if(t->type != PUNCT || t->charval != c){
+    if(t->type != PUNCT || c != t->charval){
         return FALSE;
     }
     return TRUE;
@@ -98,7 +107,7 @@ AST *ast_int(int val) {
 AST *read_term() {
     AST *res = read_factor();
     //Parse more factors
-    while(is_punct('*') || is_punct('/')){
+    while(is_punct('*') || is_punct('/') || is_punct('%')){
         Token *t = get_token();
         res = ast_bop(t->charval, res, read_factor());
     }
@@ -148,8 +157,85 @@ AST *read_uop() {
 }
 
 AST *read_expr() {
+    return read_log_OR();
+}
+
+AST *read_log_OR() {
+    AST *res = read_log_AND();
+    while(is_punct(PUNCT_LOG_OR)){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_log_AND());
+    }
+    return res;
+}
+
+AST *read_log_AND() {
+    AST *res = read_bit_OR();
+    while(is_punct(PUNCT_LOG_AND)){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_bit_OR());
+    }
+    return res;
+}
+
+AST *read_bit_OR(){
+    AST *res = read_bit_XOR();
+    while(is_punct('|')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_bit_XOR());
+    }
+    return res;
+}
+
+AST *read_bit_XOR(){
+    AST *res = read_bit_AND();
+    while(is_punct('^')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_bit_AND());
+    }
+    return res;
+}
+
+AST *read_bit_AND(){
+    AST *res = read_eq();
+    while(is_punct('&')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_eq());
+    }
+    return res;
+}
+
+AST *read_eq(){
+    AST *res = read_rel();
+    while(is_punct(PUNCT_EQ) || is_punct(PUNCT_NEQ)){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_rel());
+    }
+    return res;
+}
+
+AST *read_rel(){
+    AST *res = read_bit_shift();
+    while(is_punct(PUNCT_GTE) || is_punct(PUNCT_LTE) ||
+          is_punct('>') || is_punct('<')){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_bit_shift());
+    }
+    return res;
+}
+
+
+AST *read_bit_shift(){
+    AST *res = read_additive();
+    while(is_punct(PUNCT_LSHIFT) || is_punct(PUNCT_RSHIFT)){
+        Token *t = get_token();
+        res = ast_bop(t->charval, res, read_additive());
+    }
+    return res;
+}
+
+AST *read_additive(){
     AST *res = read_term();
-    //Parse more terms
     while(is_punct('+') || is_punct('-')){
         Token *t = get_token();
         res = ast_bop(t->charval, res, read_term());
