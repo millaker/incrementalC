@@ -1,8 +1,14 @@
 <program> = <func_decl>
-<func_decl> = "int"" <Identifier> "(" ")" "{" <statement> "}"
-<statement> = return <expr> ;
-
-<expr> = <logical-AND-expr> {"||" <logcial-AND-expr>}  ##<logical-OR> is the lowest level
+<func_decl> = "int" <Identifier> "(" ")" "{" <statement_list> "}"
+<statement_list> = <statement> { <statement_list> }
+<statement> = "return" <expr> ";"
+            | <expr> ";"
+            | <var_decl> ";"
+<var_decl> = "int" <Identifier> ["=" <expr>]
+<expr> = <assign> 
+       | <logical-or>
+<logical-or> =  <logical-AND-expr> {"||" <logcial-AND-expr>}  
+<assign> = <Identifier> "=" <expr>
 <logical-AND-expr> = <bitwise-OR> {"&&" <bitwise-OR>}
 <bitwise-OR> = <bitwise-XOR> {"|" <bitwise-XOR>}
 <bitwise-XOR> = <bitwise-AND> {"^" <bitwise-AND>}
@@ -15,6 +21,7 @@
 <factor> = "(" <expr> ")"
          | <UnaryOP> <factor>
          | IntLiteral
+         | <Identifier>  # This is for variable
 <UnaryOP> = "~"
           | "!"
           | "-"

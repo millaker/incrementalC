@@ -1,11 +1,11 @@
 CC = gcc
 CFLAGS = -Wall -g
-OBJECTS = lexer.o parser.o AST.o test.o code_gen.o
+OBJECTS = lexer.o parser.o AST.o test.o code_gen.o list.o symtab.o
 OUTFILE = test.out
 TESTLEX = lexer.out
-TESTLEXOBJ = lexer.o test_lexer.o
+TESTLEXOBJ = lexer.o test_lexer.o list.o
 TESTPARSE = parser.out
-TESTPARSEOBJ = lexer.o test_parser.o parser.o AST.o
+TESTPARSEOBJ = lexer.o test_parser.o parser.o AST.o list.o
 
 TESTINPUT = test_input
 

@@ -35,9 +35,9 @@ static inline void new_prefix(int indent, int last){
     prefix[indent] = last ? table[3] : table[1];
 }
 
-static char *operator_table[16] = {
+static char *operator_table[17] = {
     "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
-    "+=", "--", "--", "*=", "/="
+    "+=", "--", "--", "*=", "/=" , "^="
 };
 
 void __print_AST(AST *root,int indent, int last){
@@ -57,7 +57,12 @@ void __print_AST(AST *root,int indent, int last){
         case AST_FUNC:
             /* Print statement lists */
             printf("FUNC(%s)\n", root->fname);
-            __print_AST(root->stmt, indent + 1,  1);
+            for_each_node_unsafe(root->stmt,ptr){
+                if(ptr->next == root->stmt)
+                    __print_AST((AST*)ptr->val, indent + 1, 1);
+                else
+                    __print_AST((AST*)ptr->val, indent + 1, 0);
+            }
             break;
         case AST_RET:
             printf("RETURN\n");
@@ -75,6 +80,13 @@ void __print_AST(AST *root,int indent, int last){
             }
             __print_AST(root->lexpr, indent + 1, 0);
             __print_AST(root->rexpr, indent + 1, 1);
+            break;
+        case AST_VAR:
+            printf("VAR(%s)\n", root->vname);
+            break;
+        case AST_VAR_DECL:
+            printf("VAR(%s)\n", root->vname);
+            __print_AST(root->init, indent + 1, 1);
             break;
         default:
             printf("Unknown AST node\n");

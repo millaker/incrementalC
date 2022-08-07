@@ -1,10 +1,11 @@
 #include "femtoC.h"
 #include "lexer.h"
+#include "list.h"
 
 #define new_token ((Token *) malloc(sizeof(Token)))
 
 static FILE* infile = NULL;
-Token *token_buf = NULL;
+static List *token_buf = NULL;
 char curr_filename[33] = {0};
 static int curr_line = 0;
 
@@ -26,7 +27,8 @@ bool file_init(char *s) {
     FILE *f = fopen(s, "r");
     if (!f) return FALSE;
     infile = f;
-    strncpy(curr_filename, s, strlen(s));
+    strncpy(curr_filename, s, 32);
+    token_buf = NEW_LIST;
     return TRUE;
 }
 
@@ -89,6 +91,13 @@ Token *lex_punct(char c){
     t->type = PUNCT;
     t->charval = c;
     switch(c){
+        case '^':
+            c = mygetc(infile);
+            if(c == '=')
+                t->charval = PUNCT_BIT_XOR_ASSIGN;
+            else
+                ungetc(c, infile);
+            break;
         case '&':
             c = mygetc(infile);
             if(c == '&')
@@ -96,7 +105,7 @@ Token *lex_punct(char c){
             else if(c == '=')
                 t->charval = PUNCT_BIT_AND_ASSIGN;
             else
-             ungetc(c, infile);
+                ungetc(c, infile);
             break;
         case '|':
             c = mygetc(infile);
@@ -191,9 +200,10 @@ Token *lex_punct(char c){
  * Return a pointer to Token struct
  */
 Token *get_token() {
-    if (token_buf) {
-        Token *t = token_buf;
-        token_buf = NULL;
+    if (!list_is_empty(token_buf)) {
+        List *node = list_remove_head(token_buf);
+        Token *t = (Token *) node->val;
+        free(node);
         return t;
     }
     char c = mygetc(infile);
@@ -222,7 +232,7 @@ Token *get_token() {
  * Unget token
  */
 void unget_token(Token *token) {
-    token_buf = token;
+    list_insert_head(token_buf, token);
 }
 
 
@@ -230,9 +240,9 @@ void unget_token(Token *token) {
 /* There is a same table in AST.c: drawing utilities */
 /* Remember to update both table when needed*/ 
 /* When adding new elements, update the table size as well */
-static char *operator_table[16] = {
+static char *operator_table[17] = {
     "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
-    "+=", "--", "--", "*=", "/="
+    "+=", "--", "--", "*=", "/=", "^="
 };
 
 /*
@@ -295,4 +305,5 @@ char *token_to_string(Token *tok){
     }
     return tempstr;
 }
+
 

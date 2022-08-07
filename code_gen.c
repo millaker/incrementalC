@@ -5,11 +5,16 @@
 #include "code_gen.h"
 #include "femtoC.h"
 #include "AST.h"
+#include "list.h"
+#include "symtab.h"
 
 FILE* outfile = NULL;
+symtab *curr_scope = NULL;
 static int label_count = 0;
 
 #define emit(...) emitf(__VA_ARGS__)
+#define ALIGN_SIZE 8
+#define align_8(x) (((x) + ALIGN_SIZE - 1) & ~(x - 1))
 
 void emitf(char *fmt, ...) {
     va_list arg;
@@ -30,20 +35,83 @@ static void gen_log_or(AST *root);
 static void gen_log_and(AST *root);
 static void gen_binary_no_order(AST *root);
 static void gen_binary_ordered(AST *root);
+static void gen_var_decl(AST *root);
+static void gen_assign(AST *root);
 static int get_label();
+
+static void gen_assign(AST *root){
+    List *v;
+    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
+        fprintf(stderr, "Variable \"%s\" not declared\n", root->lexpr->vname);
+        exit(1);
+    }
+    int off = ((id_entry*)v->val)->var_address;
+    __code_gen(root->rexpr);
+    emit("\tmovl\t%%eax, -%d(%%rbp)\t\t#Save value to variable\n", off);
+    /* According to C99 standard 6.15.6:  An assignment expression has the value
+     * of the left operand after the assignment, but is not an lvalue. */
+    emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
+}
+
+static void gen_var_decl(AST* root){
+    if(symtab_find(curr_scope, root->vname)){
+        fprintf(stderr, "Redeclaration of variable \"%s\"\n", root->vname);
+        exit(1);
+    }
+    int offset = *((int*)curr_scope->table->val);
+    int var_size = 4;
+    *((int*)curr_scope->table->val) += align_8(var_size);
+    symtab_enter(curr_scope, root->vname, offset);
+    emit("\tsub \t$%d, %%rsp\t\t#Var declare Update new stack pointer\n",align_8(var_size));
+    if(root->init){
+        __code_gen(root->init);
+        // Save on stack
+        emit("\tmovl\t%%eax, -%d(%%rbp)\n", offset);
+    }
+}
+
+static void gen_var(AST* root){
+    List *v;
+    if(!(v = symtab_find(curr_scope, root->vname))){
+        fprintf(stderr, "Variable \"%s\" not declared\n", root->vname);
+    }
+    int off = ((id_entry*)v->val)->var_address;
+    // Get value from stack
+    emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
+}
 
 static int get_label(){
     return label_count++;
 }
+
 static void gen_func(AST *root){
+    int ret = 0;
     emit("\t.globl %s\n", root->fname);
     emit("%s:\n", root->fname);
-    __code_gen(root->stmt);
+    // emit function prologue
+    emit("\tpush\t%%rbp\t\t#Function prologue\n");
+    emit("\tmov \t%%rsp, %%rbp\t\t#Function prologue\n");
+    for_each_node_unsafe(root->stmt, ptr){
+        if(((AST*)ptr->val)->type == AST_RET)
+            ret = 1;
+        __code_gen((AST*)ptr->val);
+    }
+    // emit function epilogue
+    emit("\tmov \t%%rbp, %%rsp\t\t#Function epilogue\n");
+    emit("\tpop \t%%rbp\t\t#Function epilogue\n");
+    /*
+     * Main function with no return statement, C99 standard 5.1.2.2.3 Program termination:  */
+    /*If the return type of the main function is a type compatible with int, a return from the
+initial call to the main function is equivalent to calling the exit function with the value
+returned by the main function as its argument;10) reaching the } that terminates the
+main function returns a value of 0. */
+    if(!ret)
+        emit("\tmovl\t$0, %%eax\n");
+    emit("\tret\t\t#Function epilogue\n");
 }
 
 static void gen_ret(AST *root){
     __code_gen(root->retval);
-    emit("\tret\n");
 }
 
 static void gen_literal(AST *root) {
@@ -107,7 +175,7 @@ static void gen_binary_no_order(AST *root){
     __code_gen(root->lexpr);
     emit("\tpush\t%%rax\t\t#Push left expression result onto stack\n");
     __code_gen(root->rexpr);
-    emit("\tpop\t%%rcx\t\t#Pop left expression result\n");
+    emit("\tpop \t%%rcx\t\t#Pop left expression result\n");
     switch(root->bop){
         case '+':
             emit("\taddl\t%%ecx, %%eax\n");
@@ -143,7 +211,7 @@ static void gen_binary_ordered(AST *root){
     __code_gen(root->rexpr);
     emit("\tpush\t%%rax\t\t#Push right expression result onto stack\n");
     __code_gen(root->lexpr);
-    emit("\tpop\t%%rcx\t\t#Pop right expression result\n");
+    emit("\tpop \t%%rcx\t\t#Pop right expression result\n");
     //Left in %eax, Right in %ecx
     switch(root->bop){
         case '/':
@@ -242,10 +310,19 @@ static void __code_gen(AST *root) {
                 case PUNCT_LOG_OR:
                     gen_log_or(root);
                     break;
+                case '=':
+                    gen_assign(root);
+                    break;
                 default:
                     fprintf(stderr, "Code gen: Unkown binary operator\n");
                     exit(1);
             }
+            break;
+        case AST_VAR:
+            gen_var(root);
+            break;
+        case AST_VAR_DECL:
+            gen_var_decl(root);
             break;
         default:
             fprintf(stderr, "Code gen error: Invalid AST type\n");
@@ -264,7 +341,15 @@ void code_gen(char *filename, AST *ast) {
         fprintf(stderr, "Open output file error\n");
         exit(1);
     }
+    /* Symbol table init , separate function needed when multiple symbol tables are needed */
+    /* First offset will be 8 bytes because of saved %rbp */
+    curr_scope = NEW_SYMTAB;
+    int *off = (int*) malloc(sizeof(int));
+    *off = 8;
+    curr_scope->table->val = off;
+
     __code_gen(ast);
+    free(str);
     fclose(outfile);
 }
 

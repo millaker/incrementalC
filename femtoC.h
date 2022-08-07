@@ -32,6 +32,7 @@ enum {
     PUNCT_SUB_ASSIGN,
     PUNCT_MUL_ASSIGN,
     PUNCT_DIV_ASSIGN,
+    PUNCT_BIT_XOR_ASSIGN
 };
 
 #endif

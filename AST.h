@@ -1,14 +1,17 @@
 #ifndef AST_H
 #define AST_H
 
+#include "list.h"
+
 enum {
     AST_LITERAL,
     AST_FUNC,
     AST_RET,
     AST_UNARY,
-    AST_BINARY
+    AST_BINARY,
+    AST_VAR,
+    AST_VAR_DECL
 };
-
 
 typedef struct AST {
     int type;
@@ -18,7 +21,7 @@ typedef struct AST {
         /* FUNC */
         struct {
             char *fname;
-            struct AST *stmt;
+            List *stmt;
         };
         /* AST_RET */
         struct {
@@ -34,6 +37,12 @@ typedef struct AST {
             int bop;
             struct AST *lexpr;
             struct AST *rexpr;
+        };
+        /* AST_VAR_DECL */
+        /* Variable reference uses the same format but with init left NULL */
+        struct {
+            char *vname;
+            struct AST *init;
         };
     };
 } AST;
