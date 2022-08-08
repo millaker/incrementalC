@@ -8,7 +8,7 @@
 <expr> = <assign> 
        | <logical-or>
 <logical-or> =  <logical-AND-expr> {"||" <logcial-AND-expr>}  
-<assign> = <Identifier> "=" <expr>
+<assign> = <Identifier> ('=' | '^=' | '&=' | '|=' | '+=' | '*=' | '-=' | '/=' | '%=' | '<<=' | '>>=') <expr>
 <logical-AND-expr> = <bitwise-OR> {"&&" <bitwise-OR>}
 <bitwise-OR> = <bitwise-XOR> {"|" <bitwise-XOR>}
 <bitwise-XOR> = <bitwise-AND> {"^" <bitwise-AND>}
@@ -17,11 +17,16 @@
 <rel> = <bit-shift> {(">" | "<" | "<=" | ">=") <bit-shift>}
 <bit-shift> = <additive> {("<<" | ">>") <additive>}
 <additive> = <term> {("+" | "-") <term>}
-<term> = <factor> {("*" | "/")<factor>}
-<factor> = "(" <expr> ")"
-         | <UnaryOP> <factor>
+<term> = <unary-expr> {("*" | "/" | "%")<unary-expr>}
+<unary-expr> = <postfix-expr>
+             | <UnaryOP> <unary-expr>
+<postfix-expr> = <primary> <postfix-op>
+<postfix-op> = ("++" | "--") <postfix-op>
+<primary> = "(" <expr> ")"
          | IntLiteral
          | <Identifier>  # This is for variable
 <UnaryOP> = "~"
           | "!"
           | "-"
+          | "++"
+          | "--"

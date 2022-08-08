@@ -8,9 +8,11 @@ enum {
     AST_FUNC,
     AST_RET,
     AST_UNARY,
+    AST_POST_UNARY,
     AST_BINARY,
     AST_VAR,
-    AST_VAR_DECL
+    AST_VAR_DECL,
+    AST_NOP
 };
 
 typedef struct AST {

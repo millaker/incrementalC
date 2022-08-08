@@ -136,7 +136,13 @@ Token *lex_punct(char c){
         case '<':
             c = mygetc(infile);
             if(c == '<'){
-                t->charval = PUNCT_LSHIFT;
+                char c2 = mygetc(infile);
+                if(c2 == '='){
+                    t->charval = PUNCT_LSHIFT_ASSIGN;
+                }else{
+                    t->charval = PUNCT_LSHIFT;
+                    ungetc(c2, infile);
+                }
             } else if(c == '='){
                 t->charval = PUNCT_LTE;
             } else {
@@ -146,9 +152,15 @@ Token *lex_punct(char c){
         case '>':
             c = mygetc(infile);
             if(c == '>') {
-                t->charval = PUNCT_RSHIFT;
+                char c2 = mygetc(infile);
+                if(c2 == '='){
+                    t->charval = PUNCT_RSHIFT_ASSIGN;
+                }else{
+                    ungetc(c2,infile);
+                    t->charval = PUNCT_RSHIFT;
+                }
             }else if(c == '='){
-                t->charval = PUNCT_GTE;
+                    t->charval = PUNCT_GTE;
             }else{
                 ungetc(c, infile);
             }
@@ -185,6 +197,14 @@ Token *lex_punct(char c){
             c = mygetc(infile);
             if(c == '='){
                 t->charval = PUNCT_DIV_ASSIGN;
+            }else{
+                ungetc(c, infile);
+            }
+            break;
+        case '%':
+            c = mygetc(infile);
+            if(c == '='){
+                t->charval = PUNCT_MODULO_ASSIGN;
             }else{
                 ungetc(c, infile);
             }
@@ -240,9 +260,9 @@ void unget_token(Token *token) {
 /* There is a same table in AST.c: drawing utilities */
 /* Remember to update both table when needed*/ 
 /* When adding new elements, update the table size as well */
-static char *operator_table[17] = {
-    "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
-    "+=", "--", "--", "*=", "/=", "^="
+static char *operator_table[] = {
+    "&&", "||", "&=", "|=", "==", "!=", "<=", ">>", ">=", "<<", "++",
+    "+=", "--", "-=", "*=", "/=", "^=", "<<=", ">>=", "%="
 };
 
 /*

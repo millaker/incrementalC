@@ -23,14 +23,18 @@ AST *ast_ret(AST *retval);
 AST *ast_int(int val);
 AST *ast_var_decl(char* name);
 AST *ast_var(char *name);
+AST *ast_postuop(int op, AST *expr);
+AST *ast_nop();
 
 List *read_stmtlist();
 AST *read_identifier();
 AST *read_assign();
 AST *read_intliteral();
 AST *read_term();
-AST *read_factor();
+AST *read_primary();
 AST *read_uop();
+AST *read_uexpr();
+AST *read_postexpr();
 AST *read_expr();
 AST *read_log_OR();
 AST *read_log_AND();
@@ -98,7 +102,9 @@ bool peek_assign(){
         if(t->type == PUNCT && (t->charval == '=' || t->charval == PUNCT_ADD_ASSIGN ||
                     t->charval == PUNCT_SUB_ASSIGN || t->charval == PUNCT_DIV_ASSIGN ||
                     t->charval == PUNCT_MUL_ASSIGN || t->charval == PUNCT_BIT_AND_ASSIGN ||
-                    t->charval == PUNCT_BIT_OR_ASSIGN || t->charval == PUNCT_BIT_XOR_ASSIGN)) { /* Other assign operators can be here */
+                    t->charval == PUNCT_BIT_OR_ASSIGN || t->charval == PUNCT_BIT_XOR_ASSIGN ||
+                    t->charval == PUNCT_MODULO_ASSIGN || t->charval == PUNCT_LSHIFT_ASSIGN ||
+                    t->charval == PUNCT_RSHIFT_ASSIGN)) { /* Other assign operators can be here */
             has_assign = TRUE;
             break;
         }else if(t->type == PUNCT && t->charval == ';'){
@@ -124,6 +130,20 @@ bool is_punct(int c) {
         return FALSE;
     }
     return TRUE;
+}
+
+AST *ast_nop(){
+    AST *n = NEW_AST;
+    n->type = AST_NOP;
+    return n;
+}
+
+AST *ast_postuop(int op, AST *expr){
+    AST *n = NEW_AST;
+    n->type = AST_POST_UNARY;
+    n->uop = op;
+    n->expr = expr;
+    return n;
 }
 
 AST *ast_var(char *name){
@@ -188,11 +208,11 @@ AST *ast_int(int val) {
 }
 
 AST *read_term() {
-    AST *res = read_factor();
+    AST *res = read_uexpr();
     //Parse more factors
     while(is_punct('*') || is_punct('/') || is_punct('%')){
         Token *t = get_token();
-        AST *right = read_factor();
+        AST *right = read_uexpr();
         if(!right || !res)
             return NULL;
         res = ast_bop(t->charval, res, right);
@@ -200,7 +220,26 @@ AST *read_term() {
     return res;
 }
 
-AST *read_factor() {
+AST *read_uexpr(){
+    AST *ast = read_uop();
+    if(!ast){
+        ast = read_postexpr();
+    }
+    return ast;
+}
+
+AST *read_postexpr(){
+    AST *ast = read_primary();
+    while(is_punct(PUNCT_INC) || is_punct(PUNCT_DEC)){
+        Token *t = get_token();
+        if(!ast)
+            return NULL;
+        ast = ast_postuop(t->charval, ast);
+    }
+    return ast;
+}
+
+AST *read_primary() {
     //( expr )
     if(is_punct('(')){
         get_token();
@@ -210,11 +249,7 @@ AST *read_factor() {
         get_token();
         return expr;
     }
-    // <UnaryOP> <factor>
     AST *ast;
-    if((ast = read_uop())){
-        return ast;
-    }
     //Int literal
     if((ast = read_intliteral())){
         return ast;
@@ -236,9 +271,10 @@ AST *read_intliteral() {
 
 AST *read_uop() {
     AST *expr;
-    if(is_punct('-') || is_punct('~') || is_punct('!')){
+    if(is_punct('-') || is_punct('~') || is_punct('!') 
+            || is_punct(PUNCT_INC) || is_punct(PUNCT_DEC)){
         Token *t = get_token();
-        expr = read_factor();
+        expr = read_uexpr();
         if(!expr)
             return NULL;
         return ast_uop(t->charval, expr);
@@ -382,15 +418,20 @@ AST *read_stmt() {
         stmt = read_expr();
     if(!stmt)
         stmt = read_return();
-    if(stmt){
-        if(!is_punct(';')){
-            error("Expect semicolon, but got %s\n", token_to_string(get_token()));
-        }
+    /* To support no operation expression " ; ", we must check if stmt is NULL and next token is ';' additionally */
+    if(stmt && !is_punct(';')){
+        error("Expect semicolon, but got %s\n", token_to_string(get_token()));
+    }else if(stmt && is_punct(';')){ /* normal statements */
         get_token();
+    }
+    else if(!stmt && is_punct(';')){ /* empty expression */
+        get_token();
+        stmt = ast_nop();
     }
     return stmt;
 }
 
+/* Update of peek assign is required */
 AST *read_assign(){
     AST *var = read_identifier();
     if(!var)
@@ -398,7 +439,8 @@ AST *read_assign(){
     if(!is_punct('=') && !is_punct(PUNCT_ADD_ASSIGN) && !is_punct(PUNCT_BIT_AND_ASSIGN)
             && !is_punct(PUNCT_BIT_OR_ASSIGN) && !is_punct(PUNCT_SUB_ASSIGN) 
             && !is_punct(PUNCT_BIT_XOR_ASSIGN) && !is_punct(PUNCT_MUL_ASSIGN)
-            && !is_punct(PUNCT_DIV_ASSIGN)){
+            && !is_punct(PUNCT_DIV_ASSIGN) && !is_punct(PUNCT_MODULO_ASSIGN)
+            && !is_punct(PUNCT_RSHIFT_ASSIGN) && !is_punct(PUNCT_LSHIFT_ASSIGN)){
         error("Expect assign operator, but got %s\n", token_to_string(get_token()));
     }
     Token *op = get_token();
@@ -416,11 +458,17 @@ AST *read_assign(){
         case PUNCT_BIT_AND_ASSIGN:
             return ast_bop('=', var, ast_bop('&', var, expr));
         case PUNCT_BIT_OR_ASSIGN:
-            return ast_bop('=', var, ast_bop('^', var, expr));
+            return ast_bop('=', var, ast_bop('|', var, expr));
         case PUNCT_SUB_ASSIGN:
             return ast_bop('=', var, ast_bop('-', var, expr));
         case PUNCT_BIT_XOR_ASSIGN:
             return ast_bop('=', var, ast_bop('^', var, expr));
+        case PUNCT_MODULO_ASSIGN:
+            return ast_bop('=', var, ast_bop('%', var, expr));
+        case PUNCT_RSHIFT_ASSIGN:
+            return ast_bop('=', var, ast_bop(PUNCT_RSHIFT, var, expr));
+        case PUNCT_LSHIFT_ASSIGN:
+            return ast_bop('=', var, ast_bop(PUNCT_LSHIFT, var, expr));
         default:
             return ast_bop(op->charval, var, expr);
     }

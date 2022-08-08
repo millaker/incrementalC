@@ -35,9 +35,9 @@ static inline void new_prefix(int indent, int last){
     prefix[indent] = last ? table[3] : table[1];
 }
 
-static char *operator_table[17] = {
-    "&&", "||", "&=", "|=", "==", "!=", "<=", ">=", "<<", ">>", "++",
-    "+=", "--", "--", "*=", "/=" , "^="
+static char *operator_table[] = {
+    "&&", "||", "&=", "|=", "==", "!=", "<=", ">>", ">=", "<<", "++",
+    "+=", "--", "-=", "*=", "/=", "^=", "<<=", ">>=", "%="
 };
 
 void __print_AST(AST *root,int indent, int last){
@@ -69,7 +69,19 @@ void __print_AST(AST *root,int indent, int last){
             __print_AST(root->retval, indent + 1,  1);
             break;
         case AST_UNARY:
-            printf("UNARY(%c)\n", root->uop);
+            if(root->uop > 255){
+                printf("UNARY(%s)\n", operator_table[root->uop - 256]);
+            }else{
+                printf("UNARY(%c)\n", root->uop);
+            }
+            __print_AST(root->expr, indent + 1, 1);
+            break;
+        case AST_POST_UNARY:
+            if(root->uop > 255){
+                printf("POST_UNARY(%s)\n", operator_table[root->uop - 256]);
+            }else{
+                printf("POST_UNARY(%c)\n", root->uop);
+            }
             __print_AST(root->expr, indent + 1, 1);
             break;
         case AST_BINARY:
@@ -87,6 +99,9 @@ void __print_AST(AST *root,int indent, int last){
         case AST_VAR_DECL:
             printf("VAR(%s)\n", root->vname);
             __print_AST(root->init, indent + 1, 1);
+            break;
+        case AST_NOP:
+            printf("NOP\n");
             break;
         default:
             printf("Unknown AST node\n");

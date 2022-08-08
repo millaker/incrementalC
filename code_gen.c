@@ -13,6 +13,7 @@ symtab *curr_scope = NULL;
 static int label_count = 0;
 
 #define emit(...) emitf(__VA_ARGS__)
+#define error(...) errorf(__VA_ARGS__)
 #define ALIGN_SIZE 8
 #define align_8(x) (((x) + ALIGN_SIZE - 1) & ~(x - 1))
 
@@ -21,6 +22,14 @@ void emitf(char *fmt, ...) {
     va_start(arg, fmt);
     vfprintf(outfile, fmt, arg);
     va_end(arg);
+}
+
+void errorf(char *fmt, ...){
+    va_list arg;
+    va_start(arg, fmt);
+    fprintf(stderr, fmt, arg);
+    va_end(arg);
+    exit(1);
 }
 
 /* Forward Declaration of code-generating functions */
@@ -37,13 +46,48 @@ static void gen_binary_no_order(AST *root);
 static void gen_binary_ordered(AST *root);
 static void gen_var_decl(AST *root);
 static void gen_assign(AST *root);
+static void gen_prefix(AST *root);
+static void gen_postfix(AST *root);
 static int get_label();
+
+static void gen_postfix(AST *root){
+    /* check if operand is lvalue. Identifier is the only legal lvalue at the moment */
+    if(root->expr->type != AST_VAR){ 
+        error("Expression is not an modifiable lvalue.\n");
+    }
+    List *v;
+    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
+        error("Variable \"%s\" not declared\n", root->lexpr->vname);
+    }
+    int off = ((id_entry*)v->val)->var_address;
+    emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
+    if(root->uop == PUNCT_INC)
+        emit("\taddl\t$1, -%d(%%rbp)\n", off);
+    else
+        emit("\tsubl\t$1, -%d(%%rbp)\n", off);
+}
+
+static void gen_prefix(AST *root){
+    /* check if operand is lvalue. Identifier is the only legal lvalue at the moment */
+    if(root->expr->type != AST_VAR){ 
+        error("Expression is not an modifiable lvalue.\n");
+    }
+    List *v;
+    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
+        error("Variable \"%s\" not declared\n", root->lexpr->vname);
+    }
+    int off = ((id_entry*)v->val)->var_address;
+    if(root->uop == PUNCT_INC)
+        emit("\taddl\t$1, -%d(%%rbp)\n", off);
+    else
+        emit("\tsubl\t$1, -%d(%%rbp)\n", off);
+    emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
+}
 
 static void gen_assign(AST *root){
     List *v;
     if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
-        fprintf(stderr, "Variable \"%s\" not declared\n", root->lexpr->vname);
-        exit(1);
+        error("Variable \"%s\" not declared\n", root->lexpr->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
     __code_gen(root->rexpr);
@@ -55,8 +99,7 @@ static void gen_assign(AST *root){
 
 static void gen_var_decl(AST* root){
     if(symtab_find(curr_scope, root->vname)){
-        fprintf(stderr, "Redeclaration of variable \"%s\"\n", root->vname);
-        exit(1);
+        error("Redeclaration of variable \"%s\"\n", root->vname);
     }
     int offset = *((int*)curr_scope->table->val);
     int var_size = 4;
@@ -73,7 +116,7 @@ static void gen_var_decl(AST* root){
 static void gen_var(AST* root){
     List *v;
     if(!(v = symtab_find(curr_scope, root->vname))){
-        fprintf(stderr, "Variable \"%s\" not declared\n", root->vname);
+        error("Variable \"%s\" not declared\n", root->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
     // Get value from stack
@@ -203,8 +246,7 @@ static void gen_binary_no_order(AST *root){
             emit("\tsetne\t%%al\t\t#Set if zflag is on\n");
             break;
         default:
-            fprintf(stderr, "Undefined no order binary operator\n");
-            exit(1);
+            error("Undefined no order binary operator\n");
     }
 }
 static void gen_binary_ordered(AST *root){
@@ -253,12 +295,13 @@ static void gen_binary_ordered(AST *root){
             emit("\tsall\t%%cl, %%eax\n");
             break;
         default:
-            fprintf(stderr, "Undefined ordered binary operator\n");
-            exit(1);
+            error("Undefined ordered binary operator\n");
     }
 }
 static void __code_gen(AST *root) {
     switch(root->type) {
+        case AST_NOP:
+            break;
         case AST_FUNC:
             gen_func(root);
             break;
@@ -269,17 +312,35 @@ static void __code_gen(AST *root) {
             gen_literal(root);
             break;
         case AST_UNARY:
-            __code_gen(root->expr);
             switch(root->uop) {
                 case '-': /* Neg */
+                    __code_gen(root->expr);
                     gen_neg(root);
                     break;
                 case '!': /* logical not */
+                    __code_gen(root->expr);
                     gen_not(root);
                     break;
                 case '~': /* bitwise complement */
+                    __code_gen(root->expr);
                     gen_complement(root);
                     break;
+                case PUNCT_INC:
+                case PUNCT_DEC:
+                    gen_prefix(root);
+                    break;
+                default:
+                    error("Unknown unary operator\n");
+            }
+            break;
+        case AST_POST_UNARY:
+            switch(root->uop){
+                case PUNCT_INC:
+                case PUNCT_DEC:
+                    gen_postfix(root);
+                    break;
+                default:
+                    error("Unknown post unary operator\n");
             }
             break;
         case AST_BINARY:
@@ -314,8 +375,7 @@ static void __code_gen(AST *root) {
                     gen_assign(root);
                     break;
                 default:
-                    fprintf(stderr, "Code gen: Unkown binary operator\n");
-                    exit(1);
+                    error("Code gen: Unkown binary operator\n");
             }
             break;
         case AST_VAR:
@@ -325,8 +385,7 @@ static void __code_gen(AST *root) {
             gen_var_decl(root);
             break;
         default:
-            fprintf(stderr, "Code gen error: Invalid AST type\n");
-            exit(1);
+            error("Code gen error: Invalid AST type\n");
     }
 }
 
@@ -338,8 +397,7 @@ void code_gen(char *filename, AST *ast) {
     // Open out file
     outfile = fopen(str, "w");
     if(!outfile) {
-        fprintf(stderr, "Open output file error\n");
-        exit(1);
+        error("Open output file error\n");
     }
     /* Symbol table init , separate function needed when multiple symbol tables are needed */
     /* First offset will be 8 bytes because of saved %rbp */
