@@ -57,8 +57,12 @@ void __print_AST(AST *root,int indent, int last){
         case AST_FUNC:
             /* Print statement lists */
             printf("FUNC(%s)\n", root->fname);
-            for_each_node_unsafe(root->stmt,ptr){
-                if(ptr->next == root->stmt)
+            __print_AST(root->stmt, indent + 1 , 1);
+            break;
+        case AST_COMPOUND:
+            printf("COMP\n");
+            for_each_node_unsafe(root->comp_stmt,ptr){
+                if(ptr->next == root->comp_stmt)
                     __print_AST((AST*)ptr->val, indent + 1, 1);
                 else
                     __print_AST((AST*)ptr->val, indent + 1, 0);
@@ -99,6 +103,19 @@ void __print_AST(AST *root,int indent, int last){
         case AST_VAR_DECL:
             printf("VAR(%s)\n", root->vname);
             __print_AST(root->init, indent + 1, 1);
+            break;
+        case AST_IF:
+            printf("IF\n");
+            __print_AST(root->cond, indent + 1, 0);
+            __print_AST(root->then, indent + 1, root->els ? 0:1);
+            if(root->els)
+                __print_AST(root->els, indent + 1, 1);
+            break;
+        case AST_TENARY:
+            printf("TENARY\n");
+            __print_AST(root->cond, indent + 1, 0);
+            __print_AST(root->then, indent + 1, 0);
+            __print_AST(root->els, indent + 1, 1);
             break;
         case AST_NOP:
             printf("NOP\n");

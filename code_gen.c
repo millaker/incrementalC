@@ -48,7 +48,34 @@ static void gen_var_decl(AST *root);
 static void gen_assign(AST *root);
 static void gen_prefix(AST *root);
 static void gen_postfix(AST *root);
+static void gen_if(AST *root);
+static void gen_tenary(AST *root);
 static int get_label();
+
+static void gen_if(AST *root){
+    if(root->els){
+        gen_tenary(root);
+        return;
+    }
+    int end_label = get_label();
+    __code_gen(root->cond);
+    emit("\tcmpl\t$0, %%eax\t\t\n");
+    emit("\tje  \t.L%d\n", end_label);
+    __code_gen(root->then);
+    emit(".L%d:\n", end_label);
+}
+
+static void gen_tenary(AST *root){
+    int e2_label = get_label(), end_label = get_label();
+    __code_gen(root->cond);
+    emit("\tcmpl\t$0, %%eax\t\t\n");
+    emit("\tje  \t.L%d\n", e2_label);
+    __code_gen(root->then);
+    emit("\tjmp \t.L%d\n", end_label);
+    emit(".L%d:\n", e2_label);
+    __code_gen(root->els);
+    emit(".L%d:\n", end_label);
+}
 
 static void gen_postfix(AST *root){
     /* check if operand is lvalue. Identifier is the only legal lvalue at the moment */
@@ -134,27 +161,31 @@ static void gen_func(AST *root){
     // emit function prologue
     emit("\tpush\t%%rbp\t\t#Function prologue\n");
     emit("\tmov \t%%rsp, %%rbp\t\t#Function prologue\n");
-    for_each_node_unsafe(root->stmt, ptr){
+    for_each_node_unsafe(root->stmt->comp_stmt, ptr){
         if(((AST*)ptr->val)->type == AST_RET)
             ret = 1;
         __code_gen((AST*)ptr->val);
     }
     // emit function epilogue
-    emit("\tmov \t%%rbp, %%rsp\t\t#Function epilogue\n");
-    emit("\tpop \t%%rbp\t\t#Function epilogue\n");
     /*
      * Main function with no return statement, C99 standard 5.1.2.2.3 Program termination:  */
     /*If the return type of the main function is a type compatible with int, a return from the
 initial call to the main function is equivalent to calling the exit function with the value
 returned by the main function as its argument;10) reaching the } that terminates the
 main function returns a value of 0. */
-    if(!ret)
+    if(!ret){
+        emit("\tmov \t%%rbp, %%rsp\t\t#Function epilogue\n");
+        emit("\tpop \t%%rbp\t\t#Function epilogue\n");
         emit("\tmovl\t$0, %%eax\n");
-    emit("\tret\t\t#Function epilogue\n");
+        emit("\tret \t#Function epilogue\n");
+    }
 }
 
 static void gen_ret(AST *root){
     __code_gen(root->retval);
+    emit("\tmov \t%%rbp, %%rsp\t\t#Function epilogue\n");
+    emit("\tpop \t%%rbp\t\t#Function epilogue\n");
+    emit("\tret \t#Function epilogue\n");
 }
 
 static void gen_literal(AST *root) {
@@ -304,6 +335,12 @@ static void __code_gen(AST *root) {
             break;
         case AST_FUNC:
             gen_func(root);
+            break;
+        case AST_IF:
+            gen_if(root);
+            break;
+        case AST_TENARY:
+            gen_tenary(root);
             break;
         case AST_RET:
             gen_ret(root);

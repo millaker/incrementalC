@@ -18,15 +18,17 @@ static const char *keyword_table[KEYWORD_SIZE] = {
 /* Forward declaration */
 AST *ast_uop(int op, AST *expr);
 AST *ast_bop(int op, AST *left, AST *right);
-AST *ast_func(char *name, List* stmt_list);
+AST *ast_func(char *name, AST* stmt_list);
 AST *ast_ret(AST *retval);
 AST *ast_int(int val);
 AST *ast_var_decl(char* name);
 AST *ast_var(char *name);
 AST *ast_postuop(int op, AST *expr);
 AST *ast_nop();
+AST *ast_if(AST* cond, AST *then, AST *els);
+AST *ast_tenary(AST *cond, AST *then, AST *els);
+AST *ast_comp(List *comp_list);
 
-List *read_stmtlist();
 AST *read_identifier();
 AST *read_assign();
 AST *read_intliteral();
@@ -51,6 +53,11 @@ AST *read_func_decl();
 AST *read_program();
 AST *read_var_decl();
 AST *read_identifier();
+AST *read_selection();
+AST *read_condexpr();
+AST *read_compound();
+AST *read_blockitem();
+AST *read_exprstmt();
 
 
 bool is_keyword();
@@ -94,10 +101,16 @@ void free_list(List *l){
 }
 
 bool peek_assign(){
+  /* Current method is to look for assignment operator until the first
+   * semicolon. This will lead to parsing error for if() while() for()
+   * statements because no semicolon is required for their condition expression.
+   * One way to try is to look for unmatching parentheses. I'll implement it tomorrow.
+   */
     List *lookahead = NEW_LIST;
     bool has_assign = FALSE;
+    int paren = 0;
     Token *t;
-    while((t = get_token()) && t->type != EOF){
+    while((t = get_token())){
         list_insert_head(lookahead, t);
         if(t->type == PUNCT && (t->charval == '=' || t->charval == PUNCT_ADD_ASSIGN ||
                     t->charval == PUNCT_SUB_ASSIGN || t->charval == PUNCT_DIV_ASSIGN ||
@@ -107,8 +120,18 @@ bool peek_assign(){
                     t->charval == PUNCT_RSHIFT_ASSIGN)) { /* Other assign operators can be here */
             has_assign = TRUE;
             break;
-        }else if(t->type == PUNCT && t->charval == ';'){
-            break;
+        }else {
+            if(t->type == EOFTYPE)
+                break;
+            if(t->type == PUNCT && t->charval == ';'){
+                break;
+            }
+            if(t->type == PUNCT && t->charval == '(')
+                paren++;
+            if(t->type == PUNCT && t->charval == ')')
+                paren--;
+            if(paren < 0)
+                break;
         }
     }
     for_each_node_unsafe(lookahead,ptr){
@@ -130,6 +153,31 @@ bool is_punct(int c) {
         return FALSE;
     }
     return TRUE;
+}
+
+AST *ast_tenary(AST *cond, AST *then, AST *els){
+    AST *n = NEW_AST;
+    n->type = AST_TENARY;
+    n->cond = cond;
+    n->then = then;
+    n->els = els;
+    return n;
+}
+
+AST *ast_comp(List *comp_list){
+    AST *n = NEW_AST;
+    n->type = AST_COMPOUND;
+    n->comp_stmt = comp_list;
+    return n;
+}
+
+AST *ast_if(AST *cond, AST *then, AST *els){
+    AST *n = NEW_AST;
+    n->type = AST_IF;
+    n->cond = cond;
+    n->then = then;
+    n->els = els;
+    return n;
 }
 
 AST *ast_nop(){
@@ -183,7 +231,7 @@ AST *ast_bop(int op, AST *left, AST *right) {
     return n;
 }
 
-AST *ast_func(char *name, List *stmt_list) {
+AST *ast_func(char *name, AST *stmt_list) {
     AST *n = NEW_AST;
     n->type = AST_FUNC;
     n-> stmt = stmt_list;
@@ -282,11 +330,27 @@ AST *read_uop() {
     return NULL;
 }
 
+AST *read_exprstmt(){
+    AST *ast = read_expr();
+    if(ast && !is_punct(';')){
+        error("Expect semicolon at the end of expression, got %s\n", token_to_string(get_token()));
+    }
+    if(!ast && is_punct(';')){
+        get_token();
+        return ast_nop();
+    }else if(!ast){
+        return ast;
+    }
+    get_token();
+    return ast;
+}
+
 AST *read_expr() {
     if(peek_token(IDENTIFIER) && peek_assign()){
         return read_assign();
     }
-    return  read_log_OR();
+    AST *ast = read_condexpr();
+    return ast;
 }
 
 AST *read_log_OR() {
@@ -409,31 +473,30 @@ AST *read_return() {
     AST *retval = read_expr();
     if(!retval)
         return NULL;
+    if(!is_punct(';')){
+        error("Expect semicolon at the end of the return statement\n");
+    }
+    get_token();
     return ast_ret(retval);
 }
 
 AST *read_stmt() {
-    AST *stmt = read_var_decl();
-    if(!stmt)
-        stmt = read_expr();
+    AST *stmt = read_selection();
     if(!stmt)
         stmt = read_return();
-    /* To support no operation expression " ; ", we must check if stmt is NULL and next token is ';' additionally */
-    if(stmt && !is_punct(';')){
-        error("Expect semicolon, but got %s\n", token_to_string(get_token()));
-    }else if(stmt && is_punct(';')){ /* normal statements */
-        get_token();
-    }
-    else if(!stmt && is_punct(';')){ /* empty expression */
-        get_token();
-        stmt = ast_nop();
-    }
+    if(!stmt)
+        stmt = read_var_decl();
+    if(!stmt)
+        stmt = read_compound();
+    if(!stmt)
+        stmt = read_exprstmt();
     return stmt;
 }
 
 /* Update of peek assign is required */
 AST *read_assign(){
-    AST *var = read_identifier();
+    /* Need to be changed to unary expr and do type check at code gen */
+    AST *var = read_identifier(); 
     if(!var)
         return NULL;
     if(!is_punct('=') && !is_punct(PUNCT_ADD_ASSIGN) && !is_punct(PUNCT_BIT_AND_ASSIGN)
@@ -493,14 +556,18 @@ AST *read_var_decl(){
     if(!var)
         error("Expect ID , but got %s\n", token_to_string(get_token()));
     AST *res = ast_var_decl(var->vname);
-    if(!is_punct('=')){
-        return res;
+    AST *init = NULL;
+    if(is_punct('=')){
+        get_token();
+        init = read_expr();
+        if(!init)
+            error("Expect expression, but got %s\n", token_to_string(get_token()));
+    }
+    res->init = init;
+    if(!is_punct(';')){
+        error("Expect semicolon at the end\n");
     }
     get_token();
-    AST *init = read_expr();
-    if(!init)
-        error("Expect expression, but got %s\n", token_to_string(get_token()));
-    res->init = init;
     return res;
 }
 
@@ -526,19 +593,10 @@ AST *read_func_decl() {
         error("Expect \')\', but got %s\n", token_to_string(get_token()));
     }
     get_token();
-    if(!is_punct('{')){
-        error("Expect \'{\', but got %s\n", token_to_string(get_token()));
-    }
-    get_token();
 
-    List *stmt_list = read_stmtlist();
-    if(list_is_empty(stmt_list)){
-        error("Expected statement.\n");
-    }
-    if(!is_punct('}')){
-        error("Expect punct \'}\', but got %s\n", token_to_string(get_token()));
-    }
-    get_token();
+    AST *stmt_list = read_compound();
+    if(!stmt_list)
+        error("Function requires a statement\n");
     return ast_func(fname->string, stmt_list);
 }
 
@@ -546,11 +604,80 @@ AST *read_program() {
     return read_func_decl();
 }
 
-List *read_stmtlist(){
+AST *read_blockitem(){
+    AST *ast = read_var_decl();
+    if(!ast)
+        ast = read_stmt();
+    return ast;
+}
+
+AST *read_compound(){
+    if(!is_punct('{'))
+        return NULL; 
+    get_token();
     List *l = NEW_LIST;
     AST *curr = NULL;
-    while ((curr = read_stmt())){
+    while(1){
+        curr = read_blockitem();
+        if(!curr)
+            break;
         list_insert_tail(l, curr);
     }
-    return l;
+    if(!is_punct('}')){
+        free_list(l);
+        error("Expect closing bracket for compound statement, got %s\n", token_to_string(get_token()));
+    }
+    get_token();
+    return ast_comp(l);
+}
+
+AST *read_condexpr(){
+    AST *cond = read_log_OR();
+    if(!is_punct('?'))
+        return cond;
+    get_token();
+    if(!cond)
+        error("Expect condition expression for tenary operator, got %s\n", token_to_string(get_token()));
+    AST *e1 = read_expr();
+    if(!e1)
+        error("Expect expression 1 for tenary operator, got %s\n", token_to_string(get_token()));
+    if(!is_punct(':')){
+        error("Expect colon for tenary operator, got %s\n", token_to_string(get_token()));
+    }
+    get_token();
+    AST *e2 = read_condexpr();
+    if(!e2)
+        error("Expect expression 2 for tenary operator, got %s\n", token_to_string(get_token()));
+    return ast_tenary(cond, e1, e2);
+}
+
+AST *read_selection(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("if", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    if(!is_punct('(')){
+        error("Expect punct \'(\', but got %s\n", token_to_string(get_token()));
+    }
+    get_token();
+    AST *cond = read_expr();
+    if(!cond)
+        error("Expect expression for if condition\n");
+    if(!is_punct(')')){
+        error("Expect punct \')\', but got %s\n", token_to_string(get_token()));
+    }
+    get_token();
+    AST *then = read_stmt();
+    if(!then)
+        error("Expect statement for if statement (then part)\n");
+    t = get_token();
+    if(t->type != IDENTIFIER || strcmp("else", t->string)){
+        unget_token(t);
+        return ast_if(cond, then, NULL);
+    }
+    AST *els = read_stmt();
+    if(!els)
+        error("Expect statement for if statement (else part)\n");
+    return ast_if(cond, then, els);
 }

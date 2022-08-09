@@ -1,14 +1,28 @@
 <program> = <func_decl>
-<func_decl> = "int" <Identifier> "(" ")" "{" <statement_list> "}"
-<statement_list> = <statement> { <statement_list> }
-<statement> = "return" <expr> ";"
-            | <expr> ";"
-            | <var_decl> ";"
-<var_decl> = "int" <Identifier> ["=" <expr>]
+<func_decl> = "int" <Identifier> "(" ")" <compound-stmt>
+
+<statement> = <compound-stmt>
+            | <expression-stmt>
+            | <selection-stmt>
+            | <iteration-stmt>
+            | "return" <expr> ";"
+<compound-stmt> = "{" {<block-itemlist>} "}"
+<expression-stmt> = {<expr>} ";"
+<selection-stmt> = "if" "(" <expr> ")" <statement> {"else" <statement> }
+<block-itemlist> = <block-item> {<block-itemlist>}
+<block-item> = <var_decl>
+             | <statement>
+
+<var_decl> = "int" <Identifier> ["=" <expr>] ";"
 <expr> = <assign> 
-       | <logical-or>
+       | <conditional-expr>
+
+<conditional-expr> = <logical-or> { "?" <expr> ":" <conditional-expr>}
+
 <logical-or> =  <logical-AND-expr> {"||" <logcial-AND-expr>}  
-<assign> = <Identifier> ('=' | '^=' | '&=' | '|=' | '+=' | '*=' | '-=' | '/=' | '%=' | '<<=' | '>>=') <expr>
+<assign> = <Identifier> ('=' | '^=' | '&=' | '|=' |
+                         '+=' | '*=' | '-=' | '/=' | 
+                         '%=' | '<<=' | '>>=') <expr>
 <logical-AND-expr> = <bitwise-OR> {"&&" <bitwise-OR>}
 <bitwise-OR> = <bitwise-XOR> {"|" <bitwise-XOR>}
 <bitwise-XOR> = <bitwise-AND> {"^" <bitwise-AND>}

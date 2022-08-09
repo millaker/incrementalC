@@ -12,7 +12,10 @@ enum {
     AST_BINARY,
     AST_VAR,
     AST_VAR_DECL,
-    AST_NOP
+    AST_NOP,
+    AST_IF,
+    AST_COMPOUND,
+    AST_TENARY
 };
 
 typedef struct AST {
@@ -23,7 +26,7 @@ typedef struct AST {
         /* FUNC */
         struct {
             char *fname;
-            List *stmt;
+            struct AST *stmt;
         };
         /* AST_RET */
         struct {
@@ -45,6 +48,16 @@ typedef struct AST {
         struct {
             char *vname;
             struct AST *init;
+        };
+        /* AST_IF  or AST_TENARY */
+        struct {
+            struct AST *cond;
+            struct AST *then;
+            struct AST *els;
+        };
+        /* AST_COMPOUND */
+        struct {
+            List *comp_stmt;
         };
     };
 } AST;
