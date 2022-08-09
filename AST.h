@@ -32,7 +32,7 @@ typedef struct AST {
         struct {
             struct AST *retval;
         };
-        /* AST_UNARY */
+        /* AST_UNARY or AST_POST_UNARY */
         struct {
             int uop;
             struct AST *expr;

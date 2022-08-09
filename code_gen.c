@@ -27,7 +27,7 @@ void emitf(char *fmt, ...) {
 void errorf(char *fmt, ...){
     va_list arg;
     va_start(arg, fmt);
-    fprintf(stderr, fmt, arg);
+    vfprintf(stderr, fmt, arg);
     va_end(arg);
     exit(1);
 }
@@ -50,7 +50,68 @@ static void gen_prefix(AST *root);
 static void gen_postfix(AST *root);
 static void gen_if(AST *root);
 static void gen_tenary(AST *root);
-static int get_label();
+static int  gen_compound(AST *root);
+static int  get_label();
+static void new_scope();
+static int  close_scope();
+static List* search_curr_scope(char *name);
+static List* search_all_scope(char *name);
+
+/* Return 1 if the last statement is a return statement
+ * used to signal function generation
+ */
+static int gen_compound(AST *root){
+    int ret = 0;
+    new_scope();
+    for_each_node_unsafe(root->comp_stmt, ptr){
+        __code_gen((AST*)ptr->val);
+        if(ptr->next == root->comp_stmt && ((AST*)ptr->val)->type == AST_RET)
+            ret = 1;
+    }
+    int deallocate = close_scope();
+    emit("\tadd \t$%d, %%rsp\n", deallocate);
+    return ret;
+}
+
+static List* search_curr_scope(char *name){
+    return symtab_find(curr_scope, name);
+}
+
+static List* search_all_scope(char *name){
+    symtab *curr = curr_scope;
+    List *res = NULL;
+    while(curr){
+        res = symtab_find(curr, name);
+        if(res)
+            return res;
+        curr = curr->parent;
+    }
+    return NULL;
+}
+
+/* new_scope() and close_scope() will be called when entering and leaving a new
+ * compound statement.
+ */
+
+/* Returns the size to be deallocate */
+static int close_scope(){
+    int old_off = *((int*)curr_scope->table->val);
+    symtab *closed = curr_scope;
+    curr_scope = curr_scope->parent;
+    free_symtab(closed);
+    int curr_off = curr_scope ? *((int*)curr_scope->table->val) : 0;
+    return old_off - curr_off; 
+}
+
+static void new_scope(){
+    /* First offset will be 8 bytes because of saved %rbp */
+    symtab *new_tab = NEW_SYMTAB;
+    new_tab->parent = curr_scope;
+    int *off = (int*) malloc(sizeof(int));
+    *off = curr_scope ? *((int*)curr_scope->table->val): 0; /* inherit offset from parent */
+    new_tab->table->val = off;
+    curr_scope = new_tab;
+}
 
 static void gen_if(AST *root){
     if(root->els){
@@ -83,8 +144,8 @@ static void gen_postfix(AST *root){
         error("Expression is not an modifiable lvalue.\n");
     }
     List *v;
-    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
-        error("Variable \"%s\" not declared\n", root->lexpr->vname);
+    if(!(v = search_all_scope(root->expr->vname))){
+        error("Variable \"%s\" not declared\n", root->expr->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
     emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
@@ -100,8 +161,8 @@ static void gen_prefix(AST *root){
         error("Expression is not an modifiable lvalue.\n");
     }
     List *v;
-    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
-        error("Variable \"%s\" not declared\n", root->lexpr->vname);
+    if(!(v = search_all_scope(root->expr->vname))){
+        error("Variable \"%s\" not declared\n", root->expr->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
     if(root->uop == PUNCT_INC)
@@ -113,7 +174,7 @@ static void gen_prefix(AST *root){
 
 static void gen_assign(AST *root){
     List *v;
-    if(!(v = symtab_find(curr_scope, root->lexpr->vname))){
+    if(!(v = search_all_scope(root->lexpr->vname))){
         error("Variable \"%s\" not declared\n", root->lexpr->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
@@ -125,7 +186,7 @@ static void gen_assign(AST *root){
 }
 
 static void gen_var_decl(AST* root){
-    if(symtab_find(curr_scope, root->vname)){
+    if(search_curr_scope(root->vname)){
         error("Redeclaration of variable \"%s\"\n", root->vname);
     }
     int offset = *((int*)curr_scope->table->val);
@@ -142,7 +203,7 @@ static void gen_var_decl(AST* root){
 
 static void gen_var(AST* root){
     List *v;
-    if(!(v = symtab_find(curr_scope, root->vname))){
+    if(!(v = search_all_scope(root->vname))){
         error("Variable \"%s\" not declared\n", root->vname);
     }
     int off = ((id_entry*)v->val)->var_address;
@@ -161,11 +222,8 @@ static void gen_func(AST *root){
     // emit function prologue
     emit("\tpush\t%%rbp\t\t#Function prologue\n");
     emit("\tmov \t%%rsp, %%rbp\t\t#Function prologue\n");
-    for_each_node_unsafe(root->stmt->comp_stmt, ptr){
-        if(((AST*)ptr->val)->type == AST_RET)
-            ret = 1;
-        __code_gen((AST*)ptr->val);
-    }
+    /* gen compound */
+    ret = gen_compound(root->stmt);
     // emit function epilogue
     /*
      * Main function with no return statement, C99 standard 5.1.2.2.3 Program termination:  */
@@ -336,6 +394,9 @@ static void __code_gen(AST *root) {
         case AST_FUNC:
             gen_func(root);
             break;
+        case AST_COMPOUND:
+            gen_compound(root);
+            break;
         case AST_IF:
             gen_if(root);
             break;
@@ -436,12 +497,6 @@ void code_gen(char *filename, AST *ast) {
     if(!outfile) {
         error("Open output file error\n");
     }
-    /* Symbol table init , separate function needed when multiple symbol tables are needed */
-    /* First offset will be 8 bytes because of saved %rbp */
-    curr_scope = NEW_SYMTAB;
-    int *off = (int*) malloc(sizeof(int));
-    *off = 8;
-    curr_scope->table->val = off;
 
     __code_gen(ast);
     free(str);
