@@ -5,9 +5,17 @@
             | <expression-stmt>
             | <selection-stmt>
             | <iteration-stmt>
-            | "return" <expr> ";"
+            | <jump-stmt>
+<jump-stmt> = "return" <expr> ";"
+            | "break" ";"
+            | "continue" ";"
 <compound-stmt> = "{" {<block-itemlist>} "}"
-<expression-stmt> = {<expr>} ";"
+<iteration-stmt> = "while" "(" <expr> ")" <statement> 
+                 | "for" "(" <expr-option> ";" <expr-option>";" <expr-option> ")" <statement>
+                 | "for" "(" <var_decl> <expr-option> ";" <expr-option> ")" <statement>
+                 | "do" <statement> "while" "(" <expr> ")" ";"
+<expression-stmt> = <expr-option> ";" 
+<expr-option> = <expr> | ""
 <selection-stmt> = "if" "(" <expr> ")" <statement> {"else" <statement> }
 <block-itemlist> = <block-item> {<block-itemlist>}
 <block-item> = <var_decl>

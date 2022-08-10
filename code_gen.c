@@ -11,6 +11,16 @@
 FILE* outfile = NULL;
 symtab *curr_scope = NULL;
 static int label_count = 0;
+/*
+ * Currently no good way to track whether in loop
+   and pass labels to break and continue generators.
+   Use -1 as an invalid label number.
+   Continue label is the label where continue statement
+   jumps to. (For for loop and do loop specifically)
+*/
+static int loop_label = -1; 
+static int end_label = -1;
+static int continue_label = -1;
 
 #define emit(...) emitf(__VA_ARGS__)
 #define error(...) errorf(__VA_ARGS__)
@@ -50,6 +60,11 @@ static void gen_prefix(AST *root);
 static void gen_postfix(AST *root);
 static void gen_if(AST *root);
 static void gen_tenary(AST *root);
+static void gen_do(AST *root);
+static void gen_while(AST *root);
+static void gen_for(AST *root);
+static void gen_break(AST *root);
+static void gen_continue(AST *root);
 static int  gen_compound(AST *root);
 static int  get_label();
 static void new_scope();
@@ -57,6 +72,81 @@ static int  close_scope();
 static List* search_curr_scope(char *name);
 static List* search_all_scope(char *name);
 
+static void gen_continue(AST *root){
+    if(continue_label == -1)
+        error("\"continue\" can only appear in a loop\n");
+    emit("\tjmp \t.L%d\n", continue_label);
+}
+
+static void gen_break(AST *root){
+    if(end_label == -1)
+        error("\"break\" can only appear in a loop.\n");
+    emit("\tjmp \t.L%d\n", end_label);
+}
+
+static void gen_while(AST *root){
+    int saved_loop_label = loop_label, saved_end_label = end_label;
+    int saved_cont_l = continue_label;
+    loop_label = get_label(); 
+    end_label = get_label();
+    continue_label = get_label();
+    emit(".L%d:\n", loop_label);
+    emit(".L%d:\n", continue_label);
+    __code_gen(root->wcond);
+    emit("\tcmpl\t$0, %%eax\n");
+    emit("\tje  \t.L%d\n", end_label);
+    __code_gen(root->wbody);
+    emit("\tjmp \t.L%d\n", loop_label);
+    emit(".L%d:\n", end_label);
+    loop_label = saved_loop_label;
+    end_label = saved_end_label;
+    continue_label = saved_cont_l;
+}
+
+static void gen_do(AST *root){
+    int saved_loop_label = loop_label, saved_end_label = end_label;
+    int saved_cont_l = continue_label;
+    loop_label = get_label(); 
+    end_label = get_label();
+    continue_label = get_label();
+    emit(".L%d:\n", loop_label);
+    __code_gen(root->wbody);
+    emit(".L%d:\n", continue_label);
+    __code_gen(root->wcond);
+    emit("\tcmpl\t$0, %%eax\n");
+    emit("\tje  \t.L%d\n", end_label);
+    emit("\tjmp \t.L%d\n", loop_label);
+    emit(".L%d:\n", end_label);
+    loop_label = saved_loop_label;
+    end_label = saved_end_label;
+    continue_label = saved_cont_l;
+}
+
+static void gen_for(AST *root){
+    int saved_loop_label = loop_label, saved_end_label = end_label;
+    int saved_cont_l = continue_label;
+    loop_label = get_label(); 
+    end_label = get_label();
+    continue_label = get_label();
+    if(root->fdecl)
+        __code_gen(root->fdecl);
+    emit(".L%d:\n", loop_label);
+    if(root->fcond)
+        __code_gen(root->fcond);
+    else
+        emit("\tmovl\t$1, %%eax\n");
+    emit("\tcmpl\t$0, %%eax\n");
+    emit("\tje  \t.L%d\n", end_label);
+    __code_gen(root->fbody);
+    emit(".L%d:\n", continue_label);
+    if(root->fexpr)
+        __code_gen(root->fexpr);
+    emit("\tjmp \t.L%d\n", loop_label);
+    emit(".L%d:\n", end_label);
+    loop_label = saved_loop_label;
+    end_label = saved_end_label;
+    continue_label = saved_cont_l;
+}
 /* Return 1 if the last statement is a return statement
  * used to signal function generation
  */
@@ -390,6 +480,21 @@ static void gen_binary_ordered(AST *root){
 static void __code_gen(AST *root) {
     switch(root->type) {
         case AST_NOP:
+            break;
+        case AST_BREAK:
+            gen_break(root);
+            break;
+        case AST_CONTINUE:
+            gen_continue(root);
+            break;
+        case AST_FOR:
+            gen_for(root);
+            break;
+        case AST_WHILE:
+            gen_while(root);
+            break;
+        case AST_DO:
+            gen_do(root);
             break;
         case AST_FUNC:
             gen_func(root);

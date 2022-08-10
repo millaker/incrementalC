@@ -15,7 +15,12 @@ enum {
     AST_NOP,
     AST_IF,
     AST_COMPOUND,
-    AST_TENARY
+    AST_TENARY,
+    AST_FOR,
+    AST_WHILE,
+    AST_DO,
+    AST_BREAK,
+    AST_CONTINUE
 };
 
 typedef struct AST {
@@ -58,6 +63,18 @@ typedef struct AST {
         /* AST_COMPOUND */
         struct {
             List *comp_stmt;
+        };
+        /* AST_FOR */
+        struct {
+            struct AST *fdecl;
+            struct AST *fcond;
+            struct AST *fexpr;
+            struct AST *fbody;
+        };
+        /* AST_WHILE or AST_DO */
+        struct {
+            struct AST *wcond;
+            struct AST *wbody;
         };
     };
 } AST;

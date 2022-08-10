@@ -7,9 +7,9 @@
 
 #define NEW_AST ((AST*) malloc(sizeof(AST)))
 
-#define KEYWORD_SIZE 7
+#define KEYWORD_SIZE 10
 static const char *keyword_table[KEYWORD_SIZE] = {
-    "int", "return", "for", "if", "while", "else", "void"
+    "int", "return", "for", "if", "while", "else", "void", "break", "continue", "do"
 };
 
 /* Higher level error messages can be generated
@@ -28,6 +28,11 @@ AST *ast_nop();
 AST *ast_if(AST* cond, AST *then, AST *els);
 AST *ast_tenary(AST *cond, AST *then, AST *els);
 AST *ast_comp(List *comp_list);
+AST *ast_for(AST* decl, AST *cond, AST *expr, AST *body);
+AST *ast_while(AST *cond, AST *body);
+AST *ast_do(AST *cond, AST *body);
+AST *ast_break();
+AST *ast_continue();
 
 AST *read_identifier();
 AST *read_assign();
@@ -58,6 +63,13 @@ AST *read_condexpr();
 AST *read_compound();
 AST *read_blockitem();
 AST *read_exprstmt();
+AST *read_jumpstmt();
+AST *read_break();
+AST *read_continue();
+AST *read_iteration();
+AST *read_while();
+AST *read_do();
+AST *read_for();
 
 
 bool is_keyword();
@@ -153,6 +165,44 @@ bool is_punct(int c) {
         return FALSE;
     }
     return TRUE;
+}
+
+AST *ast_for(AST* decl, AST *cond, AST *expr, AST *body){
+    AST *n = NEW_AST;
+    n->type = AST_FOR;
+    n->fdecl = decl;
+    n->fcond = cond;
+    n->fexpr = expr;
+    n->fbody = body;
+    return n;
+}
+
+AST *ast_while(AST *cond, AST *body){
+    AST *n = NEW_AST;
+    n->type = AST_WHILE;
+    n->wcond = cond;
+    n->wbody = body;
+    return n;
+}
+
+AST *ast_do(AST *cond, AST *body){
+    AST *n = NEW_AST;
+    n->type = AST_DO;
+    n->wcond = cond;
+    n->wbody = body;
+    return n;
+}
+
+AST *ast_break(){
+    AST *n = NEW_AST;
+    n->type = AST_BREAK;
+    return n;
+}
+
+AST *ast_continue(){
+    AST *n = NEW_AST;
+    n->type = AST_CONTINUE;
+    return n;
 }
 
 AST *ast_tenary(AST *cond, AST *then, AST *els){
@@ -330,6 +380,130 @@ AST *read_uop() {
     return NULL;
 }
 
+AST *read_iteration(){
+    AST *ast = read_while();
+    if(!ast)
+        ast = read_for();
+    if(!ast)
+        ast = read_do();
+    return ast;
+}
+
+AST *read_while(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("while", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    if(!is_punct('('))
+        error("Expect \'(\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *cond = read_expr();
+    if(!cond)
+        error("Expect expression for while statement\n");
+    if(!is_punct(')'))
+        error("Expect \')\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *body = read_stmt();
+    if(!body)
+        error("Expect statement for while body\n");
+    return ast_while(cond, body);
+}
+
+AST *read_do(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("do", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    AST *body = read_stmt();
+    if(!body)
+        error("Expect statement for do body\n");
+    t = get_token();
+    if(t->type != IDENTIFIER || strcmp("while", t->string)){
+        unget_token(t);
+        error("Expect \"while\" keyword, but got %s\n", token_to_string(get_token()));
+    }
+    if(!is_punct('('))
+        error("Expect \'(\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *cond = read_expr();
+    if(!cond)
+        error("Expect condition expression for do statement\n");
+    if(!is_punct(')'))
+        error("Expect \')\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    if(!is_punct(';'))
+        error("Expect \';\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    return ast_do(cond, body);
+}
+
+AST *read_for(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("for", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    if(!is_punct('('))
+        error("Expect \'(\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *decl = read_var_decl();
+    if(!decl){
+        decl = read_expr();
+        if(!is_punct(';'))
+            error("Expect \';\' but got %s\n", token_to_string(get_token()));
+        get_token();
+    }
+    AST *cond = read_expr();
+    if(!is_punct(';'))
+        error("Expect \';\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *expr = read_expr();
+    if(!is_punct(')'))
+        error("Expect \')\' but got %s\n", token_to_string(get_token()));
+    get_token();
+    AST *body = read_stmt();
+    if(!body)
+        error("Expect statement body for for\n");
+    return ast_for(decl, cond, expr, body);
+}
+
+AST *read_jumpstmt(){
+    AST *ast = read_return();
+    if(!ast)
+        ast = read_break();
+    if(!ast)
+        ast = read_continue();
+    return ast;
+}
+
+AST *read_break(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("break", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    if(!is_punct(';')){
+        error("Expect semicolon at the end of expression, got %s\n", token_to_string(t));
+    }
+    get_token();
+    return ast_break();
+}
+
+AST *read_continue(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("continue", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    if(!is_punct(';')){
+        error("Expect semicolon at the end of expression, got %s\n", token_to_string(t));
+    }
+    get_token();
+    return ast_continue();
+}
+
 AST *read_exprstmt(){
     AST *ast = read_expr();
     if(ast && !is_punct(';')){
@@ -483,13 +657,13 @@ AST *read_return() {
 AST *read_stmt() {
     AST *stmt = read_selection();
     if(!stmt)
-        stmt = read_return();
-    if(!stmt)
-        stmt = read_var_decl();
+        stmt = read_iteration();
     if(!stmt)
         stmt = read_compound();
     if(!stmt)
         stmt = read_exprstmt();
+    if(!stmt)
+        stmt = read_jumpstmt();
     return stmt;
 }
 

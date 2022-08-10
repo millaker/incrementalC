@@ -120,6 +120,53 @@ void __print_AST(AST *root,int indent, int last){
         case AST_NOP:
             printf("NOP\n");
             break;
+        case AST_FOR:
+            printf("FOR\n");
+            if(!root->fdecl){
+                for(int i = 0; i < indent + 1; i++){
+                    fputs(prefix[i], stdout);
+                }
+                fputs(table[0], stdout);
+                printf("NO DECL\n");
+            }
+            else
+                __print_AST(root->fdecl, indent + 1, 0);
+            if(!root->fcond){
+                for(int i = 0; i < indent + 1; i++){
+                    fputs(prefix[i], stdout);
+                }
+                fputs(table[0], stdout);
+                printf("NO COND\n");
+            }
+            else
+                __print_AST(root->fcond, indent + 1, 0);
+            if(!root->fexpr){
+                for(int i = 0; i < indent + 1; i++){
+                    fputs(prefix[i], stdout);
+                }
+                fputs(table[0], stdout);
+                printf("NO EXPR\n");
+            }
+            else
+                __print_AST(root->fexpr, indent + 1, 0);
+            __print_AST(root->fbody, indent + 1, 1);
+            break;
+        case AST_WHILE:
+            printf("WHILE\n");
+            __print_AST(root->wcond, indent + 1, 0);
+            __print_AST(root->wbody, indent + 1, 1);
+            break;
+        case AST_DO:
+            printf("DO\n");
+            __print_AST(root->wcond, indent + 1, 0);
+            __print_AST(root->wbody, indent + 1, 1);
+            break;
+        case AST_BREAK:
+            printf("BREAK\n");
+            break;
+        case AST_CONTINUE:
+            printf("CONTINUE\n");
+            break;
         default:
             printf("Unknown AST node\n");
     }
