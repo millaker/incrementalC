@@ -18,7 +18,7 @@ static const char *keyword_table[KEYWORD_SIZE] = {
 /* Forward declaration */
 AST *ast_uop(int op, AST *expr);
 AST *ast_bop(int op, AST *left, AST *right);
-AST *ast_func(char *name, AST* stmt_list);
+AST *ast_func(char *name, AST* stmt_list, List *param);
 AST *ast_ret(AST *retval);
 AST *ast_int(int val);
 AST *ast_var_decl(char* name);
@@ -33,6 +33,8 @@ AST *ast_while(AST *cond, AST *body);
 AST *ast_do(AST *cond, AST *body);
 AST *ast_break();
 AST *ast_continue();
+AST *ast_program();
+AST *ast_func_call(char *name, List *arg);
 
 AST *read_identifier();
 AST *read_assign();
@@ -54,7 +56,6 @@ AST *read_bit_shift();
 AST *read_additive();
 AST *read_return();
 AST *read_stmt();
-AST *read_func_decl();
 AST *read_program();
 AST *read_var_decl();
 AST *read_identifier();
@@ -70,6 +71,10 @@ AST *read_iteration();
 AST *read_while();
 AST *read_do();
 AST *read_for();
+List *read_paramlist();
+AST *read_param();
+AST *read_func_decl();
+List *read_func_arg();
 
 
 bool is_keyword();
@@ -165,6 +170,21 @@ bool is_punct(int c) {
         return FALSE;
     }
     return TRUE;
+}
+
+AST *ast_func_call(char *name, List *arg){
+    AST *n = NEW_AST;
+    n->type = AST_FUNC_CALL;
+    n->fname = name;
+    n->param = arg;
+    return n;
+}
+
+AST *ast_program(List *l){
+    AST *n = NEW_AST;
+    n->type = AST_PROGRAM;
+    n->func_decl = l;
+    return n;
 }
 
 AST *ast_for(AST* decl, AST *cond, AST *expr, AST *body){
@@ -281,10 +301,11 @@ AST *ast_bop(int op, AST *left, AST *right) {
     return n;
 }
 
-AST *ast_func(char *name, AST *stmt_list) {
+AST *ast_func(char *name, AST *stmt_list, List *param) {
     AST *n = NEW_AST;
     n->type = AST_FUNC;
-    n-> stmt = stmt_list;
+    n->stmt = stmt_list;
+    n->param = param;
     char *tempstr = (char *) malloc(sizeof(char) * (strlen(name) + 1));
     strncpy(tempstr, name, strlen(name) + 1);
     n->fname = tempstr;
@@ -326,8 +347,33 @@ AST *read_uexpr(){
     return ast;
 }
 
+List *read_func_arg(){
+    List *l = NEW_LIST;
+    AST *ast;
+    while((ast = read_expr())){
+        list_insert_tail(l, ast);
+        if(!is_punct(','))
+            break;
+        get_token();
+    }
+    return l;
+}
+
+/* currently a very broken practice, should allow recursive call to parse
+ * postfix expression and do type checking afterwards
+ */
 AST *read_postexpr(){
     AST *ast = read_primary();
+    if(!ast)
+        return NULL;
+    if(is_punct('(')){
+        get_token();
+        List *l = read_func_arg();
+        if(!is_punct(')'))
+            error("Expect closing parenthesis, got %s\n", token_to_string(get_token()));
+        get_token();
+        return ast_func_call(ast->vname, l);
+    }
     while(is_punct(PUNCT_INC) || is_punct(PUNCT_DEC)){
         Token *t = get_token();
         if(!ast)
@@ -745,11 +791,39 @@ AST *read_var_decl(){
     return res;
 }
 
+AST *read_param(){
+    Token *t = get_token();
+    if(t->type != IDENTIFIER || strcmp("int", t->string)){
+        unget_token(t);
+        return NULL;
+    }
+    AST *ast = read_identifier();
+    if(!ast){
+        char *n = malloc(sizeof(char) * 10 );
+        strcpy(n, "anonymous");
+        return ast_var(n);
+    }
+    return ast;
+}
+
+List *read_paramlist(){
+    List *res = NEW_LIST;
+    AST *var;
+    while((var = read_param())){
+        list_insert_tail(res, var);
+        if(!is_punct(',')){
+            break;
+        }
+        get_token();
+    }
+    return res;
+}
+
 AST *read_func_decl() {
     Token *tok = get_token();
     if(tok->type != IDENTIFIER || strcmp(tok->string, "int")){
         unget_token(tok);
-        error("Expect keyword \"int\", but got %s\n", token_to_string(tok));
+        return NULL;
     }
     //parse func name
     tok = get_token();
@@ -763,19 +837,34 @@ AST *read_func_decl() {
         error("Expect \'(\', but got %s\n", token_to_string(get_token()));
     }
     get_token();
+    List *param = read_paramlist();
     if(!is_punct(')')){
         error("Expect \')\', but got %s\n", token_to_string(get_token()));
     }
     get_token();
 
+    if(is_punct(';')){
+        /* Stmt will be NULL for function declaration */
+        get_token();
+        return  ast_func(fname->string, NULL, param);
+    }
     AST *stmt_list = read_compound();
-    if(!stmt_list)
-        error("Function requires a statement\n");
-    return ast_func(fname->string, stmt_list);
+    if(!stmt_list){
+        error("Expect function body, got %s\n", token_to_string(get_token()));
+    }
+    return ast_func(fname->string, stmt_list, param);
 }
 
 AST *read_program() {
-    return read_func_decl();
+    List *l = NEW_LIST;
+    AST *ast;
+    while((ast = read_func_decl())){
+        list_insert_tail(l,ast);
+    }
+    if(list_is_empty(l)){
+        error("No function error\n");
+    }
+    return ast_program(l);
 }
 
 AST *read_blockitem(){

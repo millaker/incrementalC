@@ -43,3 +43,14 @@ List *new_list(){
     return res;
 }
 
+int list_count(List *head){
+    int res = 0;
+    List *curr = head->next;
+    while(curr != head){
+        res++;
+        curr = curr->next;
+    }
+    return res;
+}
+
+

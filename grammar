@@ -1,5 +1,8 @@
-<program> = <func_decl>
-<func_decl> = "int" <Identifier> "(" ")" <compound-stmt>
+<program> = {<func_decl>}
+
+<func_decl> = "int" <Identifier> "(" [<param-list>]")" <compound-stmt>
+            | "int" <Identifier> "(" [<param-list>] ")" ";"
+<param-list> = "int" <Identifier> {, <param-list> }
 
 <statement> = <compound-stmt>
             | <expression-stmt>
@@ -44,6 +47,8 @@
              | <UnaryOP> <unary-expr>
 <postfix-expr> = <primary> <postfix-op>
 <postfix-op> = ("++" | "--") <postfix-op>
+             | "(" <argument-list>")"
+<argument-list> = [<expr> { , <expr>}]
 <primary> = "(" <expr> ")"
          | IntLiteral
          | <Identifier>  # This is for variable

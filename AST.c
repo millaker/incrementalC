@@ -57,6 +57,14 @@ void __print_AST(AST *root,int indent, int last){
         case AST_FUNC:
             /* Print statement lists */
             printf("FUNC(%s)\n", root->fname);
+            if(!list_is_empty(root->param)){
+                for_each_node_unsafe(root->param, ptr){
+                    if(ptr->next == root->param && !root->stmt)
+                        __print_AST((AST*)ptr->val, indent + 1, 1);
+                    else
+                        __print_AST((AST*)ptr->val, indent + 1, 0);
+                }
+            }
             __print_AST(root->stmt, indent + 1 , 1);
             break;
         case AST_COMPOUND:
@@ -166,6 +174,27 @@ void __print_AST(AST *root,int indent, int last){
             break;
         case AST_CONTINUE:
             printf("CONTINUE\n");
+            break;
+        case AST_PROGRAM:
+            printf("PROGRAM\n");
+            for_each_node_unsafe(root->func_decl, ptr){
+                if(ptr->next == root->func_decl)
+                    __print_AST((AST*)ptr->val, indent + 1, 1);
+                else
+                    __print_AST((AST*)ptr->val, indent + 1, 0);
+            }
+            break;
+        case AST_FUNC_CALL:
+            /* Print statement lists */
+            printf("FUNC_CALL(%s)\n", root->fname);
+            if(!list_is_empty(root->param)){
+                for_each_node_unsafe(root->param, ptr){
+                    if(ptr->next == root->param)
+                        __print_AST((AST*)ptr->val, indent + 1, 1);
+                    else
+                        __print_AST((AST*)ptr->val, indent + 1, 0);
+                }
+            }
             break;
         default:
             printf("Unknown AST node\n");

@@ -20,7 +20,9 @@ enum {
     AST_WHILE,
     AST_DO,
     AST_BREAK,
-    AST_CONTINUE
+    AST_CONTINUE,
+    AST_PROGRAM,
+    AST_FUNC_CALL
 };
 
 typedef struct AST {
@@ -28,10 +30,11 @@ typedef struct AST {
     union {
         /* Literal */
         int intval;
-        /* FUNC */
+        /* FUNC or FUNC_CALL*/
         struct {
             char *fname;
             struct AST *stmt;
+            List *param;
         };
         /* AST_RET */
         struct {
@@ -75,6 +78,10 @@ typedef struct AST {
         struct {
             struct AST *wcond;
             struct AST *wbody;
+        };
+        /* AST_PROGARM */
+        struct {
+            List *func_decl;
         };
     };
 } AST;

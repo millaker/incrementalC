@@ -9,6 +9,7 @@
 #include "symtab.h"
 
 FILE* outfile = NULL;
+symtab *global_scope = NULL;
 symtab *curr_scope = NULL;
 static int label_count = 0;
 /*
@@ -44,7 +45,9 @@ void errorf(char *fmt, ...){
 
 /* Forward Declaration of code-generating functions */
 static void __code_gen(AST *root);
-static void gen_func(AST *root);
+static void gen_func_def(AST *root);
+static void gen_func_decl(AST *root);
+static void gen_func_call(AST *root);
 static void gen_ret(AST *root);
 static void gen_literal(AST *root);
 static void gen_neg(AST* root);
@@ -65,12 +68,38 @@ static void gen_while(AST *root);
 static void gen_for(AST *root);
 static void gen_break(AST *root);
 static void gen_continue(AST *root);
-static int  gen_compound(AST *root);
+static int  gen_compound(AST *root, List *param);
 static int  get_label();
 static void new_scope();
 static int  close_scope();
-static List* search_curr_scope(char *name);
-static List* search_all_scope(char *name);
+static List *search_curr_scope(char *name);
+static List *search_global(char *name);
+static List *search_all_scope(char *name);
+
+static void gen_func_call(AST *root){
+    List *func_def = search_global(root->fname);
+    if(!func_def)
+        error("Function undeclared\n");
+    int off = list_count(((id_entry*)func_def->val)->arg) * 8;
+    /* Push parameters onto stack */
+    for_each_node_reverse_unsafe(root->param, ptr){
+        __code_gen((AST *)ptr->val);
+        emit("\tpush\t%%rax\n");
+    }
+    emit("\tcall %s\n", root->fname);
+    emit("\tadd \t$%d, %%rsp\n",off);
+}
+
+static List *search_global(char *name){
+    return symtab_find(global_scope, name);
+}
+
+static void gen_func_decl(AST *root){
+    if(search_global(root->fname)){
+        error("Redefinition of function %s\n", root->fname);
+    }
+    symtab_enter(global_scope, root->fname, 0, root->param);
+}
 
 static void gen_continue(AST *root){
     if(continue_label == -1)
@@ -150,16 +179,25 @@ static void gen_for(AST *root){
 /* Return 1 if the last statement is a return statement
  * used to signal function generation
  */
-static int gen_compound(AST *root){
+static int gen_compound(AST *root, List *param){
     int ret = 0;
     new_scope();
+    /* Enter function parameter offset into symbol table */
+    /* %rbp + 8 will be return value, so the offset starts from 16 */
+    int x = 1;
+    if(param){
+        for_each_node_unsafe(param, ptr){
+            symtab_enter(curr_scope, ((AST*)ptr->val)->vname, -8 - 8 * (x++), NULL);
+        }
+    }
     for_each_node_unsafe(root->comp_stmt, ptr){
         __code_gen((AST*)ptr->val);
         if(ptr->next == root->comp_stmt && ((AST*)ptr->val)->type == AST_RET)
             ret = 1;
     }
     int deallocate = close_scope();
-    emit("\tadd \t$%d, %%rsp\n", deallocate);
+    if(deallocate)
+        emit("\tadd \t$%d, %%rsp\n", deallocate);
     return ret;
 }
 
@@ -282,7 +320,7 @@ static void gen_var_decl(AST* root){
     int offset = *((int*)curr_scope->table->val);
     int var_size = 4;
     *((int*)curr_scope->table->val) += align_8(var_size);
-    symtab_enter(curr_scope, root->vname, offset);
+    symtab_enter(curr_scope, root->vname, offset, NULL);
     emit("\tsub \t$%d, %%rsp\t\t#Var declare Update new stack pointer\n",align_8(var_size));
     if(root->init){
         __code_gen(root->init);
@@ -298,14 +336,24 @@ static void gen_var(AST* root){
     }
     int off = ((id_entry*)v->val)->var_address;
     // Get value from stack
-    emit("\tmovl\t-%d(%%rbp), %%eax\n", off);
+    emit("\tmovl\t%d(%%rbp), %%eax\n", off * -1);
 }
 
 static int get_label(){
     return label_count++;
 }
 
-static void gen_func(AST *root){
+static void gen_func_def(AST *root){
+    /* Must do symtab check first , enter info for function call*/
+    /* Since there is only one type (int), so checking argument types is trivial
+     * Will count nodes in list for now */
+    List *history = search_global(root->fname);
+    if(!history)
+        symtab_enter(global_scope, root->fname, 0, root->param);
+    else if(list_count(((id_entry*)history->val)->arg) != list_count(root->param)){
+        error("Conflicting function definitions\n");
+    }
+    
     int ret = 0;
     emit("\t.globl %s\n", root->fname);
     emit("%s:\n", root->fname);
@@ -313,7 +361,7 @@ static void gen_func(AST *root){
     emit("\tpush\t%%rbp\t\t#Function prologue\n");
     emit("\tmov \t%%rsp, %%rbp\t\t#Function prologue\n");
     /* gen compound */
-    ret = gen_compound(root->stmt);
+    ret = gen_compound(root->stmt, root->param);
     // emit function epilogue
     /*
      * Main function with no return statement, C99 standard 5.1.2.2.3 Program termination:  */
@@ -497,10 +545,16 @@ static void __code_gen(AST *root) {
             gen_do(root);
             break;
         case AST_FUNC:
-            gen_func(root);
+            if(root->stmt)
+                gen_func_def(root);
+            else
+                gen_func_decl(root);
+            break;
+        case AST_FUNC_CALL:
+            gen_func_call(root);
             break;
         case AST_COMPOUND:
-            gen_compound(root);
+            gen_compound(root, NULL);
             break;
         case AST_IF:
             gen_if(root);
@@ -587,6 +641,11 @@ static void __code_gen(AST *root) {
         case AST_VAR_DECL:
             gen_var_decl(root);
             break;
+        case AST_PROGRAM:
+            for_each_node_unsafe(root->func_decl, ptr){
+                __code_gen((AST*)ptr->val);
+            }
+            break;
         default:
             error("Code gen error: Invalid AST type\n");
     }
@@ -603,7 +662,10 @@ void code_gen(char *filename, AST *ast) {
         error("Open output file error\n");
     }
 
+    /* open scope for global */
+    global_scope = NEW_SYMTAB;
     __code_gen(ast);
+    free_symtab(global_scope);
     free(str);
     fclose(outfile);
 }

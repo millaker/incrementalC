@@ -10,11 +10,12 @@ symtab *new_symtab(){
     return s;
 }
 
-void symtab_enter(symtab *t, char *name, int var_address){
+void symtab_enter(symtab *t, char *name, int var_address, List *arg){
     id_entry *e = (id_entry*) malloc(sizeof(&e));
     char *tempstr = (char*) malloc(sizeof(char) *(strlen(name) + 1));
     strcpy(tempstr, name);
     e->name = tempstr;
+    e->arg = arg;
     e->var_address = var_address;
     list_insert_tail(t->table, e);
 }
